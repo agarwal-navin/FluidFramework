@@ -60,8 +60,7 @@ export interface IRouterliciousRouteOptions extends IBaseRouteOptions {
     mode: "r11s";
     fluidHost?: string;
     tenantId?: string;
-    tenantSecret?: string;
-    bearerSecret?: string;
+    frsAccessToken?: string;
 }
 
 export interface ITinyliciousRouteOptions extends IBaseRouteOptions {

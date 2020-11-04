@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import path from "path";
+import Axios from "axios";
 import express from "express";
 import nconf from "nconf";
 import WebpackDevServer from "webpack-dev-server";
@@ -16,7 +17,6 @@ import {
 } from "@fluidframework/tool-utils";
 import { IFluidPackage } from "@fluidframework/core-interfaces";
 import { IOdspTokens, getServer } from "@fluidframework/odsp-doclib-utils";
-import Axios from "axios";
 import { RouteOptions } from "./loader";
 import { createManifestResponse } from "./bohemiaIntercept";
 import { tinyliciousUrls } from "./multiResolver";
@@ -63,32 +63,44 @@ export const after = (app: express.Application, server: WebpackDevServer, baseDi
         }
     }
 
-    if (options.mode === "docker" || options.mode === "r11s" || options.mode === "tinylicious") {
+    if (options.mode === "docker" || options.mode === "tinylicious") {
         options.bearerSecret = options.bearerSecret || config.get("fluid:webpack:bearerSecret");
-        if (options.mode !== "tinylicious") {
+        if (options.mode === "docker") {
             options.tenantId = options.tenantId || config.get("fluid:webpack:tenantId") || "fluid";
-            if (options.mode === "docker") {
                 options.tenantSecret = options.tenantSecret
                     || config.get("fluid:webpack:docker:tenantSecret")
                     || "create-new-tenants-if-going-to-production";
-            } else {
-                options.tenantSecret = options.tenantSecret || config.get("fluid:webpack:tenantSecret");
-            }
-            if (options.mode === "r11s") {
-                options.fluidHost = options.fluidHost || config.get("fluid:webpack:fluidHost");
             }
         }
-    }
 
     options.npm = options.npm || config.get("fluid:webpack:npm");
 
     console.log(options);
 
-    if (options.mode === "r11s" && !(options.tenantId && options.tenantSecret)) {
-        throw new Error("You must provide a tenantId and tenantSecret to connect to a live routerlicious server");
+    let readyP: ((req: express.Request, res: express.Response) => Promise<boolean>) | undefined;
+    if (options.mode === "r11s") {
+        readyP = async (req: express.Request, res: express.Response) => {
+            if (req.url === "/favicon.ico") {
+                // ignore these
+                return false;
+            }
+
+            const documentId = req.params.id;
+            const tokenServer = "https://authfluidwindows.azurewebsites.net/api/FRSToken";
+            const requestConfig = {
+                params: { documentId },
+            };
+            const response = await Axios.get(tokenServer, requestConfig);
+            if (response.status !== 200) {
+                throw new Error("Could not get token from server");
+            }
+            options.fluidHost = "frs.office-int.com";
+            options.tenantId = response.data.tenantId;
+            options.frsAccessToken = response.data.token;
+            return true;
+        };
     }
 
-    let readyP: ((req: express.Request, res: express.Response) => Promise<boolean>) | undefined;
     if (options.mode === "spo-df" || options.mode === "spo") {
         if (!options.forceReauth && options.odspAccessToken) {
             odspAuthStage = options.pushAccessToken ? 2 : 1;

@@ -9,6 +9,7 @@ import { LocalResolver } from "@fluidframework/local-driver";
 import { InsecureUrlResolver } from "@fluidframework/test-runtime-utils";
 import { RouteOptions } from "./loader";
 import { OdspUrlResolver } from "./odspUrlResolver";
+import { FRSUrlResolver } from "./frsUrlResolver";
 
 export const dockerUrls = {
     hostUrl: "http://localhost:3000",
@@ -33,12 +34,11 @@ function getUrlResolver(options: RouteOptions): IUrlResolver {
                 options.bearerSecret);
 
         case "r11s":
-            return new InsecureUrlResolver(
+            return new FRSUrlResolver(
                 options.fluidHost,
-                options.fluidHost.replace("www", "alfred"),
-                options.fluidHost.replace("www", "historian"),
                 options.tenantId,
-                options.bearerSecret);
+                options.frsAccessToken,
+            );
         case "tinylicious":
             return new InsecureUrlResolver(
                 tinyliciousUrls.hostUrl,
@@ -93,6 +93,7 @@ export class MultiUrlResolver implements IUrlResolver {
         }
         switch (this.options.mode) {
             case "r11s":
+                return (this.urlResolver as FRSUrlResolver).createCreateNewRequest(fileName);
             case "docker":
             case "tinylicious":
                 return (this.urlResolver as InsecureUrlResolver).createCreateNewRequest(fileName);
