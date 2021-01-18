@@ -37,6 +37,7 @@ export interface ITabsDataModel extends EventEmitter {
     getFluidObjectTab(id: string): Promise<IFluidObject | undefined>;
     getTabIds(): string[];
     createTab(factory: IFluidDataStoreFactory): Promise<string>;
+    closeTab(): void;
     getNewTabTypes(): ITabsTypes[];
 }
 
@@ -89,6 +90,14 @@ export class TabsDataModel extends EventEmitter implements ITabsDataModel {
         });
 
         return newKey;
+    }
+
+    public closeTab() {
+        const tabIds = this.getTabIds();
+        if (tabIds.length === 0) {
+            return;
+        }
+        this.tabs.delete(tabIds[0]);
     }
 
     private getObjectFromDirectory(id: string, directory: IDirectory): string | IFluidHandle | undefined {

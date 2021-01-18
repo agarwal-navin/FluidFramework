@@ -14,7 +14,7 @@ import React from "react";
 
 import { EmbeddedFluidObjectWrapper } from "../library";
 import { ITabsDataModel } from "./dataModel";
-import { NewTabButton } from "./newTabButton";
+import { NewTabButton, CloseTabButton } from "./newTabButton";
 
 import "react-tabs/style/react-tabs.css";
 
@@ -81,6 +81,7 @@ export class TabsView extends React.Component<ITabsViewProps, ITabsViewState> {
                         <NewTabButton
                             createTab={this.createNewTab}
                             fluidObjects={this.props.dataModel.getNewTabTypes()} />
+                        <CloseTabButton closeTab={() => this.props.dataModel.closeTab()} />
                     </li>
                 </TabList>
                 <div style={{ position: "relative" }}>

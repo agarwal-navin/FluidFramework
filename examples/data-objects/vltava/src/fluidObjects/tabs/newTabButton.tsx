@@ -29,6 +29,10 @@ export interface IButtonExampleProps {
     fluidObjects: ITabsTypes[];
 }
 
+export interface ICloseButtonProps {
+    closeTab: () => void;
+}
+
 const customSplitButtonStyles: IButtonStyles = {
     splitButtonMenuButton: { backgroundColor: "white", width: 15, border: "none" },
     splitButtonMenuIcon: { fontSize: "7px" },
@@ -41,6 +45,7 @@ const customSplitButtonStyles: IButtonStyles = {
 };
 
 const addIcon: IIconProps = { iconName: "Add" };
+const deleteIcon: IIconProps = { iconName: "Remove" };
 
 export const NewTabButton: React.FC<IButtonExampleProps> =
     (props: IButtonExampleProps) => {
@@ -71,6 +76,22 @@ export const NewTabButton: React.FC<IButtonExampleProps> =
                 onClick={() => props.createTab(pmfe)} // this should be taken from the list
                 disabled={disabled}
                 checked={checked}
+                text="hello"
+            />
+        );
+    };
+
+export const CloseTabButton: React.FC<ICloseButtonProps> =
+    (props: ICloseButtonProps) => {
+        return (
+            <IconButton
+                split
+                iconProps={deleteIcon}
+                splitButtonAriaLabel="Close current tab"
+                aria-roledescription="split button"
+                styles={customSplitButtonStyles}
+                ariaLabel="Close current tabl"
+                onClick={() => props.closeTab()}
                 text="hello"
             />
         );
