@@ -30,12 +30,6 @@ export const generateLoaderOptions = (seed: number): ILoaderOptions[]=>
         loaderOptionsMatrix,
         seed);
 
-const gcOptionsMatrix: OptionsMatrix<IGCRuntimeOptions> = {
-    disableGC: booleanCases,
-    gcAllowed: booleanCases,
-    runFullGC: booleanCases,
-};
-
 export function generateRuntimeOptions(seed: number) {
     const summaryOptionsMatrix: OptionsMatrix<ISummaryRuntimeOptions> = {
         disableIsolatedChannels: booleanCases,
@@ -43,6 +37,12 @@ export function generateRuntimeOptions(seed: number) {
         initialSummarizerDelayMs: numberCases,
         summaryConfigOverrides:[undefined],
         maxOpsSinceLastSummary: numberCases,
+    };
+    const gcOptionsMatrix: OptionsMatrix<IGCRuntimeOptions> = {
+        disableGC: booleanCases,
+        gcAllowed: booleanCases,
+        runFullGC: booleanCases,
+        runGCInTestMode: booleanCases,
     };
 
     // Using an Omit here such that when new options are added, it is required to either explicitly omit them from
