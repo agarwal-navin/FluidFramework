@@ -44,6 +44,7 @@ import {
 	channelsTreeName,
 	IInboundSignalMessage,
 	gcDataBlobKey,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	GCDataBuilder,
@@ -1222,6 +1223,28 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 				}
 			}
 		}
+	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {
+		const channelsBuilder = summaryBuilder.createChildBuilder(".channels", fullTree);
+		await this.visitContextsDuringSummary(
+			async (contextId: string, context: FluidDataStoreContext) => {
+				const contextSummaryBuilder = channelsBuilder.createChildBuilder(contextId, fullTree);
+				await context.summarize2(
+					contextSummaryBuilder,
+					latestSummarySequenceNumber,
+					fullTree,
+					telemetryContext,
+				);
+			},
+			{ fullTree, realizedDuring: "summarize" },
+		);
+		channelsBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	public async summarize(

@@ -89,6 +89,7 @@ import {
 	channelsTreeName,
 	gcTreeKey,
 	IInboundSignalMessage,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	GCDataBuilder,
@@ -3297,6 +3298,63 @@ export class ContainerRuntime
 			);
 
 			return { stats, summary };
+		} finally {
+			summaryLogger.sendTelemetryEvent({
+				eventName: "SummarizeTelemetry",
+				details: telemetryContext.serialize(),
+			});
+		}
+	}
+
+	public async summarize2(options: {
+		summaryBuilder: ISummaryBuilder;
+		/** True to generate the full tree with no handle reuse optimizations; defaults to false */
+		fullTree: boolean;
+		/** True to track the state for this summary in the SummarizerNodes; defaults to true */
+		trackState?: boolean;
+		/** Logger to use for correlated summary events */
+		summaryLogger?: ITelemetryLoggerExt;
+		/** True to run garbage collection before summarizing; defaults to true */
+		runGC?: boolean;
+		/** True to generate full GC data */
+		fullGC?: boolean;
+		/** True to run GC sweep phase after the mark phase */
+		runSweep?: boolean;
+	}) {
+		const {
+			summaryBuilder,
+			fullTree,
+			trackState = true,
+			summaryLogger = this.mc.logger,
+			runGC = this.garbageCollector.shouldRunGC,
+			runSweep,
+			fullGC,
+		} = options;
+
+		const telemetryContext = new TelemetryContext();
+		// Add the options that are used to generate this summary to the telemetry context.
+		telemetryContext.setMultiple("fluid_Summarize", "Options", {
+			fullTree,
+			trackState,
+			runGC,
+			fullGC,
+			runSweep,
+		});
+
+		try {
+			if (runGC) {
+				await this.collectGarbage(
+					{ logger: summaryLogger, runSweep, fullGC },
+					telemetryContext,
+				);
+			}
+
+			await this.channelCollection.summarize2(
+				summaryBuilder,
+				this.lastAckedSummaryContext?.referenceSequenceNumber ?? -1,
+				fullTree,
+				telemetryContext,
+			);
 		} finally {
 			summaryLogger.sendTelemetryEvent({
 				eventName: "SummarizeTelemetry",

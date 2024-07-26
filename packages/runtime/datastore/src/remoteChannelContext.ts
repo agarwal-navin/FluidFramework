@@ -23,6 +23,7 @@ import {
 	ISummarizeInternalResult,
 	ISummarizeResult,
 	ISummarizerNodeWithGC,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	ITelemetryLoggerExt,
@@ -50,6 +51,7 @@ export class RemoteChannelContext implements IChannelContext {
 	private readonly subLogger: ITelemetryLoggerExt;
 	private readonly thresholdOpsCounter: ThresholdCounter;
 	private static readonly pendingOpsCountThreshold = 1000;
+	private lastProcessedSequenceNumber: number = -1;
 
 	constructor(
 		runtime: IFluidDataStoreRuntime,
@@ -167,6 +169,7 @@ export class RemoteChannelContext implements IChannelContext {
 		localOpMetadata: unknown,
 	): void {
 		this.summarizerNode.invalidate(message.sequenceNumber);
+		this.lastProcessedSequenceNumber = message.sequenceNumber;
 
 		if (this.isLoaded) {
 			this.services.deltaConnection.process(message, local, localOpMetadata);
@@ -188,6 +191,18 @@ export class RemoteChannelContext implements IChannelContext {
 		assert(this.isLoaded, 0x2f0 /* "Remote channel must be loaded when rolling back op" */);
 
 		this.services.deltaConnection.rollback(content, localOpMetadata);
+	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {
+		if (this.lastProcessedSequenceNumber > latestSummarySequenceNumber && !fullTree) {
+			summaryBuilder.completeSummary(false /* nodeChanged */);
+			return;
+		}
 	}
 
 	/**

@@ -22,6 +22,7 @@ declare type MakeUnusedImportErrorsGoAway<T> = TypeOnly<T> | MinimalType<T> | Fu
  * typeValidation.broken:
  * "Interface_IChannel": {"forwardCompat": false}
  */
+// @ts-expect-error compatibility expected to be broken
 declare type old_as_current_for_Interface_IChannel = requireAssignableTo<TypeOnly<old.IChannel>, TypeOnly<current.IChannel>>
 
 /*

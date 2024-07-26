@@ -549,10 +549,10 @@ export class SummaryBuilder implements ISummaryBuilder {
 	private readonly fullPath: string;
 
 	constructor(
-		private readonly parentBuilder: SummaryBuilder,
 		private readonly parentPath: string,
 		private readonly id: string,
 		private readonly fullTree: boolean,
+		private readonly parentBuilder?: SummaryBuilder,
 	) {
 		this.fullPath = `${this.parentPath}/id`;
 		this.summaryStats = mergeStats();
@@ -571,7 +571,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 	}
 
 	public createChildBuilder(childId: string, fullTree: boolean) {
-		return new SummaryBuilder(this, this.fullPath, childId, fullTree);
+		return new SummaryBuilder(this.fullPath, childId, fullTree, this);
 	}
 
 	public getChildSummary(id: string): SummaryObject | undefined {
@@ -579,6 +579,9 @@ export class SummaryBuilder implements ISummaryBuilder {
 	}
 
 	public completeSummary(nodeChanged: boolean) {
+		if (this.parentBuilder === undefined) {
+			return;
+		}
 		assert(
 			this.parentBuilder.getChildSummary(this.id) === undefined,
 			"An entry for this node already exists",

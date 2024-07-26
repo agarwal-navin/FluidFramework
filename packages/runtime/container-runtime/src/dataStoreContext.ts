@@ -53,6 +53,7 @@ import {
 	SummarizeInternalFn,
 	channelsTreeName,
 	IInboundSignalMessage,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	addBlobToSummary,
@@ -346,6 +347,8 @@ export abstract class FluidDataStoreContext
 	public readonly loadingGroupId: string | undefined;
 	protected pkg?: readonly string[];
 
+	private lastProcessedSequenceNumber: number = -1;
+
 	constructor(
 		props: IFluidDataStoreContextProps,
 		private readonly existing: boolean,
@@ -582,6 +585,7 @@ export abstract class FluidDataStoreContext
 		}
 
 		this.summarizerNode.recordChange(message);
+		this.lastProcessedSequenceNumber = message.sequenceNumber;
 
 		if (this.loaded) {
 			return this.channel?.process(message, local, localOpMetadata);
@@ -610,6 +614,27 @@ export abstract class FluidDataStoreContext
 
 	public getAudience(): IAudience {
 		return this.parentContext.getAudience();
+	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {
+		if (this.lastProcessedSequenceNumber > latestSummarySequenceNumber && !fullTree) {
+			summaryBuilder.completeSummary(false /* nodeChanged */);
+			return;
+		}
+		await this.realize();
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		this.channel!.summarize2?.(
+			summaryBuilder,
+			latestSummarySequenceNumber,
+			fullTree,
+			telemetryContext,
+		);
+		summaryBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

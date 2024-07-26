@@ -54,6 +54,7 @@ import {
 	VisibilityState,
 	gcDataBlobKey,
 	IInboundSignalMessage,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	GCDataBuilder,
@@ -756,6 +757,27 @@ export class FluidDataStoreRuntime
 
 		// Get the outbound routes and add a GC node for this channel.
 		builder.addNode("/", this.getOutboundRoutes());
+	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {
+		const channelsBuilder = summaryBuilder.createChildBuilder(".channels", fullTree);
+		await this.visitContextsDuringSummary(
+			async (contextId: string, context: IChannelContext) => {
+				const contextSummaryBuilder = summaryBuilder.createChildBuilder(contextId, fullTree);
+				await context.summarize2(
+					contextSummaryBuilder,
+					latestSummarySequenceNumber,
+					fullTree,
+					telemetryContext,
+				);
+			},
+		);
+		channelsBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

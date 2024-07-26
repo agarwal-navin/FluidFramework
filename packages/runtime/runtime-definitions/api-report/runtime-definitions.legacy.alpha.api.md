@@ -144,7 +144,7 @@ export interface IFluidDataStoreChannel extends IDisposable {
     setConnectionState(connected: boolean, clientId?: string): any;
     summarize(fullTree?: boolean, trackState?: boolean, telemetryContext?: ITelemetryContext): Promise<ISummaryTreeWithStats>;
     // (undocumented)
-    summarize2?(summaryBuilder: ISummaryBuilder, fullTree?: boolean, telemetryContext?: ITelemetryContext): Promise<void>;
+    summarize2?(summaryBuilder: ISummaryBuilder, latestSummarySequenceNumber: number, fullTree: boolean, telemetryContext: ITelemetryContext): Promise<void>;
     updateUsedRoutes(usedRoutes: string[]): void;
 }
 

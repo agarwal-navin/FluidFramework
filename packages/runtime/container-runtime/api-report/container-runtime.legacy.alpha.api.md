@@ -170,6 +170,16 @@ export class ContainerRuntime extends TypedEventEmitter<IContainerRuntimeEvents 
         runSweep?: boolean;
     }): Promise<ISummaryTreeWithStats>;
     // (undocumented)
+    summarize2(options: {
+        summaryBuilder: ISummaryBuilder;
+        fullTree: boolean;
+        trackState?: boolean;
+        summaryLogger?: ITelemetryLoggerExt;
+        runGC?: boolean;
+        fullGC?: boolean;
+        runSweep?: boolean;
+    }): Promise<void>;
+    // (undocumented)
     summarizeOnDemand(options: IOnDemandSummarizeOptions): ISummarizeResults;
     get summarizerClientId(): string | undefined;
     updateTombstonedRoutes(tombstonedRoutes: readonly string[]): void;

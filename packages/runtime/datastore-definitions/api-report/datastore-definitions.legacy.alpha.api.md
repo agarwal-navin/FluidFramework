@@ -14,6 +14,8 @@ export interface IChannel extends IFluidLoadable {
     readonly id: string;
     isAttached(): boolean;
     summarize(fullTree?: boolean, trackState?: boolean, telemetryContext?: ITelemetryContext, incrementalSummaryContext?: IExperimentalIncrementalSummaryContext): Promise<ISummaryTreeWithStats>;
+    // (undocumented)
+    summarize2(summaryBuilder: ISummaryBuilder, latestSummarySequenceNumber: number, fullTree: boolean, telemetryContext: ITelemetryContext): Promise<void>;
 }
 
 // @alpha

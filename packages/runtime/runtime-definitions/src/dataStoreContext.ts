@@ -334,8 +334,9 @@ export interface IFluidDataStoreChannel extends IDisposable {
 
 	summarize2?(
 		summaryBuilder: ISummaryBuilder,
-		fullTree?: boolean,
-		telemetryContext?: ITelemetryContext,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
 	): Promise<void>;
 
 	/**

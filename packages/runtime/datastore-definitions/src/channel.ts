@@ -10,6 +10,7 @@ import type {
 	IGarbageCollectionData,
 	ISummaryTreeWithStats,
 	ITelemetryContext,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 
 import type { IFluidDataStoreRuntime } from "./dataStoreRuntime.js";
@@ -97,6 +98,13 @@ export interface IChannel extends IFluidLoadable {
 		telemetryContext?: ITelemetryContext,
 		incrementalSummaryContext?: IExperimentalIncrementalSummaryContext,
 	): Promise<ISummaryTreeWithStats>;
+
+	summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void>;
 
 	/**
 	 * Checks if the channel is attached to storage.

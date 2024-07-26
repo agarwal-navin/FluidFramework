@@ -230,6 +230,22 @@
 		"typescript": "~5.4.5"
 	},
 	"typeValidation": {
-		"broken": {}
+		"broken": {
+			"Class_ChannelCollection": {
+				"forwardCompat": false
+			},
+			"Class_ContainerRuntime": {
+				"forwardCompat": false
+			},
+			"Class_FluidDataStoreContext": {
+				"forwardCompat": false
+			},
+			"Class_LocalFluidDataStoreContext": {
+				"forwardCompat": false
+			},
+			"Class_LocalFluidDataStoreContextBase": {
+				"forwardCompat": false
+			}
+		}
 	}
 }

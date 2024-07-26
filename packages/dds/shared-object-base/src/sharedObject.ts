@@ -31,6 +31,7 @@ import {
 	IGarbageCollectionData,
 	blobCountPropertyName,
 	totalBlobSizePropertyName,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	toDeltaManagerInternal,
@@ -345,6 +346,13 @@ export abstract class SharedObjectCore<
 		trackState?: boolean,
 		telemetryContext?: ITelemetryContext,
 	): Promise<ISummaryTreeWithStats>;
+
+	public abstract summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void>;
 
 	/**
 	 * {@inheritDoc (ISharedObject:interface).getGCData}
@@ -734,6 +742,13 @@ export abstract class SharedObject<
 		);
 		return result;
 	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {}
 
 	/**
 	 * {@inheritDoc (ISharedObject:interface).getGCData}

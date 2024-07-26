@@ -19,6 +19,7 @@ import {
 	IFluidDataStoreContext,
 	IGarbageCollectionData,
 	ISummarizeResult,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import {
 	ITelemetryLoggerExt,
@@ -42,6 +43,7 @@ import { ISharedObjectRegistry } from "./dataStoreRuntime.js";
 export abstract class LocalChannelContextBase implements IChannelContext {
 	private globallyVisible = false;
 	protected readonly pending: ISequencedDocumentMessage[] = [];
+	private lastProcessedSequenceNumber: number = -1;
 	constructor(
 		protected readonly id: string,
 		protected readonly runtime: IFluidDataStoreRuntime,
@@ -83,6 +85,8 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 			this.globallyVisible,
 			0x2d3 /* "Local channel must be globally visible when processing op" */,
 		);
+
+		this.lastProcessedSequenceNumber = message.sequenceNumber;
 
 		// A local channel may not be loaded in case where we rehydrate the container from a snapshot because of
 		// delay loading. So after the container is attached and some other client joins which start generating
@@ -130,6 +134,19 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 	): Promise<ISummarizeResult> {
 		const channel = await this.getChannel();
 		return summarizeChannelAsync(channel, fullTree, trackState, telemetryContext);
+	}
+
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void> {
+		if (this.lastProcessedSequenceNumber > latestSummarySequenceNumber && !fullTree) {
+			summaryBuilder.completeSummary(false /* nodeChanged */);
+			return;
+		}
+		// const channel = await this.getChannel();
 	}
 
 	/**

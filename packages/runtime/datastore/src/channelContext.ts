@@ -22,6 +22,7 @@ import {
 	IGarbageCollectionData,
 	IFluidDataStoreContext,
 	ISummarizeResult,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import { addBlobToSummary } from "@fluidframework/runtime-utils/internal";
 import {
@@ -52,6 +53,13 @@ export interface IChannelContext {
 		trackState?: boolean,
 		telemetryContext?: ITelemetryContext,
 	): Promise<ISummarizeResult>;
+
+	summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): Promise<void>;
 
 	reSubmit(content: any, localOpMetadata: unknown): void;
 
@@ -136,6 +144,25 @@ export async function summarizeChannelAsync(
 	addBlobToSummary(summarizeResult, attributesBlobKey, JSON.stringify(channel.attributes));
 	return summarizeResult;
 }
+
+// export async function summarizeChannelAsync2(
+// 	channel: IChannel,
+// 	summaryBuilder: ISummaryBuilder,
+// 	latestSummarySequenceNumber: number,
+// 	fullTree: boolean,
+// 	telemetryContext: ITelemetryContext,
+// ): Promise<void> {
+// 	const summarizeResult = await channel.summarize(
+// 		fullTree,
+// 		trackState,
+// 		telemetryContext,
+// 		incrementalSummaryContext,
+// 	);
+
+// 	// Add the channel attributes to the returned result.
+// 	addBlobToSummary(summarizeResult, attributesBlobKey, JSON.stringify(channel.attributes));
+// 	return summarizeResult;
+// }
 
 export async function loadChannelFactoryAndAttributes(
 	dataStoreContext: IFluidDataStoreContext,
