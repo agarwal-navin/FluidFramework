@@ -143,6 +143,8 @@ export interface IFluidDataStoreChannel extends IDisposable {
     setAttachState(attachState: AttachState.Attaching | AttachState.Attached): void;
     setConnectionState(connected: boolean, clientId?: string): any;
     summarize(fullTree?: boolean, trackState?: boolean, telemetryContext?: ITelemetryContext): Promise<ISummaryTreeWithStats>;
+    // (undocumented)
+    summarize2?(summaryBuilder: ISummaryBuilder, fullTree?: boolean, telemetryContext?: ITelemetryContext): Promise<void>;
     updateUsedRoutes(usedRoutes: string[]): void;
 }
 
@@ -324,6 +326,24 @@ export interface ISummarizerNodeWithGC extends ISummarizerNode {
     getGCData(fullGC?: boolean): Promise<IGarbageCollectionData>;
     isReferenced(): boolean;
     updateUsedRoutes(usedRoutes: string[]): void;
+}
+
+// @alpha (undocumented)
+export interface ISummaryBuilder {
+    // (undocumented)
+    addAttachment: (id: string) => void;
+    // (undocumented)
+    addBlob: (key: string, content: string | Uint8Array) => void;
+    // (undocumented)
+    addHandle: (key: string, handleType: SummaryType.Tree | SummaryType.Blob | SummaryType.Attachment, handle: string) => void;
+    // (undocumented)
+    addTree: (key: string, summarizeResult: ISummarizeResult) => void;
+    // (undocumented)
+    completeSummary: (nodeChanged: boolean) => void;
+    // (undocumented)
+    createChildBuilder: (childId: string, fullTree: boolean) => ISummaryBuilder;
+    // (undocumented)
+    getChildSummary: (id: string) => SummaryObject | undefined;
 }
 
 // @alpha

@@ -10,6 +10,8 @@ import type {
 	ITree,
 	SummaryTree,
 	ISequencedDocumentMessage,
+	SummaryType,
+	SummaryObject,
 } from "@fluidframework/driver-definitions/internal";
 import type { TelemetryEventPropertyTypeExt } from "@fluidframework/telemetry-utils/internal";
 
@@ -386,6 +388,24 @@ export interface ITelemetryContext {
 		property: string,
 		values: Record<string, TelemetryBaseEventPropertyType>,
 	): void;
+}
+
+/**
+ * @legacy
+ * @alpha
+ */
+export interface ISummaryBuilder {
+	createChildBuilder: (childId: string, fullTree: boolean) => ISummaryBuilder;
+	getChildSummary: (id: string) => SummaryObject | undefined;
+	completeSummary: (nodeChanged: boolean) => void;
+	addTree: (key: string, summarizeResult: ISummarizeResult) => void;
+	addHandle: (
+		key: string,
+		handleType: SummaryType.Tree | SummaryType.Blob | SummaryType.Attachment,
+		handle: string,
+	) => void;
+	addAttachment: (id: string) => void;
+	addBlob: (key: string, content: string | Uint8Array) => void;
 }
 
 /**

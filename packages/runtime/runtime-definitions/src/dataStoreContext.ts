@@ -38,6 +38,7 @@ import type { IInboundSignalMessage } from "./protocol.js";
 import type {
 	CreateChildSummarizerNodeParam,
 	ISummarizerNodeWithGC,
+	ISummaryBuilder,
 	ISummaryTreeWithStats,
 	ITelemetryContext,
 	SummarizeInternalFn,
@@ -330,6 +331,12 @@ export interface IFluidDataStoreChannel extends IDisposable {
 		trackState?: boolean,
 		telemetryContext?: ITelemetryContext,
 	): Promise<ISummaryTreeWithStats>;
+
+	summarize2?(
+		summaryBuilder: ISummaryBuilder,
+		fullTree?: boolean,
+		telemetryContext?: ITelemetryContext,
+	): Promise<void>;
 
 	/**
 	 * Returns the data used for garbage collection. This includes a list of GC nodes that represent this context

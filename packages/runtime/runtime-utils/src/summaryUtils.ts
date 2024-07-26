@@ -31,6 +31,7 @@ import {
 	ISummarizeResult,
 	ITelemetryContextExt,
 	gcDataBlobKey,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import type { TelemetryEventPropertyTypeExt } from "@fluidframework/telemetry-utils/internal";
 
@@ -211,96 +212,6 @@ export class SummaryTreeBuilder implements ISummaryTreeWithStats {
 
 	public getSummaryTree(): ISummaryTreeWithStats {
 		return { summary: this.summary, stats: this.stats };
-	}
-}
-
-export class SummaryBuilder {
-	private attachmentCounter: number = 0;
-	private readonly summaryTree: { [path: string]: SummaryObject } = {};
-	private summaryStats: ISummaryStats = mergeStats();
-	private readonly fullPath: string;
-
-	constructor(
-		private readonly parentBuilder: SummaryBuilder,
-		private readonly parentPath: string,
-		private readonly id: string,
-	) {
-		this.fullPath = `${this.parentPath}/id`;
-		this.summaryStats = mergeStats();
-		this.summaryStats.treeNodeCount++;
-	}
-
-	public get summary(): ISummaryTree {
-		return {
-			type: SummaryType.Tree,
-			tree: { ...this.summaryTree },
-		};
-	}
-
-	public get stats(): Readonly<ISummaryStats> {
-		return { ...this.summaryStats };
-	}
-
-	public createChildBuilder(childId: string) {
-		return new SummaryBuilder(this, this.fullPath, childId);
-	}
-
-	public getChildSummary(id: string): SummaryObject | undefined {
-		return this.summaryTree[id];
-	}
-
-	public completeSummary(nodeChanged: boolean) {
-		assert(
-			this.parentBuilder.getChildSummary(this.id) === undefined,
-			"An entry for this node already exists",
-		);
-		if (nodeChanged) {
-			assert(Object.keys(this.summaryTree).length > 0, "No entries in the summary tree");
-			const summaryTreeWithStats: ISummaryTreeWithStats = {
-				summary: this.summary,
-				stats: this.stats,
-			};
-			this.parentBuilder.addTree(this.id, summaryTreeWithStats);
-		} else {
-			this.parentBuilder.addHandle(this.id, SummaryType.Tree, this.fullPath);
-		}
-	}
-
-	public addTree(key: string, summarizeResult: ISummarizeResult): void {
-		this.summaryTree[key] = summarizeResult.summary;
-		this.summaryStats = mergeStats(this.summaryStats, summarizeResult.stats);
-	}
-
-	public addHandle(
-		key: string,
-		handleType: SummaryType.Tree | SummaryType.Blob | SummaryType.Attachment,
-		handle: string,
-	): void {
-		this.summaryTree[key] = {
-			type: SummaryType.Handle,
-			handleType,
-			handle,
-		};
-		this.summaryStats.handleNodeCount++;
-	}
-
-	public addAttachment(id: string) {
-		this.summaryTree[this.attachmentCounter++] = { id, type: SummaryType.Attachment };
-	}
-
-	public addBlob(key: string, content: string | Uint8Array): void {
-		// Prevent cloning by directly referencing underlying private properties
-		addBlobToSummary(
-			{
-				summary: {
-					type: SummaryType.Tree,
-					tree: this.summaryTree,
-				},
-				stats: this.summaryStats,
-			},
-			key,
-			content,
-		);
 	}
 }
 
@@ -628,5 +539,98 @@ export class GCDataBuilder implements IGarbageCollectionData {
 		return {
 			gcNodes: this.gcNodes,
 		};
+	}
+}
+
+export class SummaryBuilder implements ISummaryBuilder {
+	private attachmentCounter: number = 0;
+	private readonly summaryTree: { [path: string]: SummaryObject } = {};
+	private summaryStats: ISummaryStats = mergeStats();
+	private readonly fullPath: string;
+
+	constructor(
+		private readonly parentBuilder: SummaryBuilder,
+		private readonly parentPath: string,
+		private readonly id: string,
+		private readonly fullTree: boolean,
+	) {
+		this.fullPath = `${this.parentPath}/id`;
+		this.summaryStats = mergeStats();
+		this.summaryStats.treeNodeCount++;
+	}
+
+	public get summary(): ISummaryTree {
+		return {
+			type: SummaryType.Tree,
+			tree: { ...this.summaryTree },
+		};
+	}
+
+	public get stats(): Readonly<ISummaryStats> {
+		return { ...this.summaryStats };
+	}
+
+	public createChildBuilder(childId: string, fullTree: boolean) {
+		return new SummaryBuilder(this, this.fullPath, childId, fullTree);
+	}
+
+	public getChildSummary(id: string): SummaryObject | undefined {
+		return this.summaryTree[id];
+	}
+
+	public completeSummary(nodeChanged: boolean) {
+		assert(
+			this.parentBuilder.getChildSummary(this.id) === undefined,
+			"An entry for this node already exists",
+		);
+		if (nodeChanged) {
+			assert(Object.keys(this.summaryTree).length > 0, "No entries in the summary tree");
+			const summaryTreeWithStats: ISummaryTreeWithStats = {
+				summary: this.summary,
+				stats: this.stats,
+			};
+			this.parentBuilder.addTree(this.id, summaryTreeWithStats);
+		} else {
+			assert(!this.fullTree, "Summary cannot be a handle when fullTree is enabled");
+			this.parentBuilder.addHandle(this.id, SummaryType.Tree, this.fullPath);
+		}
+	}
+
+	public addTree(key: string, summarizeResult: ISummarizeResult): void {
+		this.summaryTree[key] = summarizeResult.summary;
+		this.summaryStats = mergeStats(this.summaryStats, summarizeResult.stats);
+	}
+
+	public addHandle(
+		key: string,
+		handleType: SummaryType.Tree | SummaryType.Blob | SummaryType.Attachment,
+		handle: string,
+	): void {
+		assert(!this.fullTree, "Cannot add handle when fullTree is enabled");
+		this.summaryTree[key] = {
+			type: SummaryType.Handle,
+			handleType,
+			handle,
+		};
+		this.summaryStats.handleNodeCount++;
+	}
+
+	public addAttachment(id: string) {
+		this.summaryTree[this.attachmentCounter++] = { id, type: SummaryType.Attachment };
+	}
+
+	public addBlob(key: string, content: string | Uint8Array): void {
+		// Prevent cloning by directly referencing underlying private properties
+		addBlobToSummary(
+			{
+				summary: {
+					type: SummaryType.Tree,
+					tree: this.summaryTree,
+				},
+				stats: this.summaryStats,
+			},
+			key,
+			content,
+		);
 	}
 }

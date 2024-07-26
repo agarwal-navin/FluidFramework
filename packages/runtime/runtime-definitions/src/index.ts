@@ -63,6 +63,7 @@ export type {
 	ITelemetryContext,
 	ITelemetryContextExt,
 	SummarizeInternalFn,
+	ISummaryBuilder,
 } from "./summary.js";
 export {
 	blobCountPropertyName,
