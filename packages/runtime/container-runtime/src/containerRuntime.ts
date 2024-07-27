@@ -2337,45 +2337,48 @@ export class ContainerRuntime
 	}
 
 	protected addContainerStateToSummary2(
-		summaryTree: ISummaryTreeWithStats,
+		summaryBuilder: ISummaryBuilder,
 		fullTree: boolean,
-		trackState: boolean,
 		telemetryContext?: ITelemetryContext,
 	) {
-		addBlobToSummary(summaryTree, metadataBlobName, JSON.stringify(this.getMetadata()));
+		summaryBuilder.addBlob(metadataBlobName, JSON.stringify(this.getMetadata()));
 
 		if (this._idCompressor) {
 			const idCompressorState = JSON.stringify(this._idCompressor.serialize(false));
-			addBlobToSummary(summaryTree, idCompressorBlobName, idCompressorState);
+			summaryBuilder.addBlob(idCompressorBlobName, idCompressorState);
 		}
 
 		if (this.remoteMessageProcessor.partialMessages.size > 0) {
 			const content = JSON.stringify([...this.remoteMessageProcessor.partialMessages]);
-			addBlobToSummary(summaryTree, chunksBlobName, content);
+			summaryBuilder.addBlob(chunksBlobName, content);
 		}
 
 		const dataStoreAliases = this.channelCollection.aliases;
 		if (dataStoreAliases.size > 0) {
-			addBlobToSummary(summaryTree, aliasBlobName, JSON.stringify([...dataStoreAliases]));
+			summaryBuilder.addBlob(aliasBlobName, JSON.stringify([...dataStoreAliases]));
 		}
 
 		if (this.summarizerClientElection) {
 			const electedSummarizerContent = JSON.stringify(
 				this.summarizerClientElection?.serialize(),
 			);
-			addBlobToSummary(summaryTree, electedSummarizerBlobName, electedSummarizerContent);
+			summaryBuilder.addBlob(electedSummarizerBlobName, electedSummarizerContent);
 		}
 
 		const blobManagerSummary = this.blobManager.summarize();
 		// Some storage (like git) doesn't allow empty tree, so we can omit it.
 		// and the blob manager can handle the tree not existing when loading
 		if (Object.keys(blobManagerSummary.summary.tree).length > 0) {
-			addSummarizeResultToSummary(summaryTree, blobsTreeName, blobManagerSummary);
+			summaryBuilder.addTree(blobsTreeName, blobManagerSummary);
 		}
 
-		const gcSummary = this.garbageCollector.summarize(fullTree, trackState, telemetryContext);
+		const gcSummary = this.garbageCollector.summarize(
+			fullTree,
+			true /* trackState */,
+			telemetryContext,
+		);
 		if (gcSummary !== undefined) {
-			addSummarizeResultToSummary(summaryTree, gcTreeKey, gcSummary);
+			summaryBuilder.addTree(gcTreeKey, gcSummary);
 		}
 	}
 
@@ -3328,7 +3331,7 @@ export class ContainerRuntime
 				);
 			}
 
-			const { stats, summary } = await this.summarizerNode.summarize(
+			const summary1 = await this.summarizerNode.summarize(
 				fullTree,
 				trackState,
 				telemetryContext,
@@ -3336,15 +3339,16 @@ export class ContainerRuntime
 
 			const summaryBuilder = new SummaryBuilder("", "", fullTree);
 			await this.summarize2({ summaryBuilder, ...options, fullTree });
+			this.addContainerStateToSummary2(summaryBuilder, fullTree, telemetryContext);
 			const summary2 = summaryBuilder.getSummaryTree();
 			assert(summary2 !== undefined, "");
 
 			assert(
-				summary.type === SummaryType.Tree,
+				summary1.summary.type === SummaryType.Tree,
 				0x12f /* "Container Runtime's summarize should always return a tree" */,
 			);
 
-			return { stats, summary };
+			return summary1 as ISummaryTreeWithStats;
 		} finally {
 			summaryLogger.sendTelemetryEvent({
 				eventName: "SummarizeTelemetry",
