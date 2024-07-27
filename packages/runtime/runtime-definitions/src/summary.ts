@@ -406,6 +406,7 @@ export interface ISummaryBuilder {
 	) => void;
 	addAttachment: (id: string) => void;
 	addBlob: (key: string, content: string | Uint8Array) => void;
+	getSummaryTree: () => ISummaryTreeWithStats;
 }
 
 /**

@@ -22,6 +22,7 @@ import {
 	type IGarbageCollectionData,
 	type ISummaryTreeWithStats,
 	type ITelemetryContext,
+	type ISummaryBuilder,
 } from '@fluidframework/runtime-definitions/internal';
 import { DataProcessingError, EventEmitterWithErrorHandling } from '@fluidframework/telemetry-utils/internal';
 import { type ITree } from '@fluidframework/tree';
@@ -233,6 +234,12 @@ export class MigrationShim extends EventEmitterWithErrorHandling<IMigrationEvent
 	): Promise<ISummaryTreeWithStats> {
 		return this.currentTree.summarize(fullTree, trackState, telemetryContext, incrementalSummaryContext);
 	}
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext
+	): Promise<void> {}
 	public isAttached(): boolean {
 		return this.currentTree.isAttached();
 	}

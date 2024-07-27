@@ -34,6 +34,7 @@ import {
 	loadChannelFactoryAndAttributes,
 	summarizeChannel,
 	summarizeChannelAsync,
+	summarizeChannelAsync2,
 } from "./channelContext.js";
 import { ISharedObjectRegistry } from "./dataStoreRuntime.js";
 
@@ -146,7 +147,15 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 			summaryBuilder.completeSummary(false /* nodeChanged */);
 			return;
 		}
-		// const channel = await this.getChannel();
+		const channel = await this.getChannel();
+		await summarizeChannelAsync2(
+			channel,
+			summaryBuilder,
+			latestSummarySequenceNumber,
+			fullTree,
+			telemetryContext,
+		);
+		summaryBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

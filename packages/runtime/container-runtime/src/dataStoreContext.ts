@@ -628,12 +628,30 @@ export abstract class FluidDataStoreContext
 		}
 		await this.realize();
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		this.channel!.summarize2?.(
+		await this.channel!.summarize2?.(
 			summaryBuilder,
 			latestSummarySequenceNumber,
 			fullTree,
 			telemetryContext,
 		);
+		// Add data store's attributes to the summary.
+		const { pkg } = await this.getInitialSnapshotDetails();
+		const isRoot = await this.isRoot();
+		const attributes = createAttributes(pkg, isRoot);
+		summaryBuilder.addBlob(dataStoreAttributesBlobName, JSON.stringify(attributes));
+
+		const summaryTree = summaryBuilder.getSummaryTree();
+		// If we are not referenced, mark the summary tree as unreferenced. Also, update unreferenced blob
+		// size in the summary stats with the blobs size of this data store.
+		if (!this.summarizerNode.isReferenced()) {
+			summaryTree.summary.unreferenced = true;
+			summaryTree.stats.unreferencedBlobSize = summaryTree.stats.totalBlobSize;
+		}
+
+		// Add loadingGroupId to the summary
+		if (this.loadingGroupId !== undefined) {
+			summaryTree.summary.groupId = this.loadingGroupId;
+		}
 		summaryBuilder.completeSummary(true /* nodeChanged */);
 	}
 

@@ -102,6 +102,7 @@ import {
 	exceptionToResponse,
 	responseToException,
 	seqFromTree,
+	SummaryBuilder,
 } from "@fluidframework/runtime-utils/internal";
 import type { ITelemetryGenericEventExt } from "@fluidframework/telemetry-utils/internal";
 import {
@@ -754,7 +755,7 @@ async function createSummarizer(loader: ILoader, url: string): Promise<ISummariz
  * Extract last message from the snapshot metadata.
  * Uses legacy property if not using explicit schema control, otherwise uses the new property.
  * This allows new runtime to make documents not openable for old runtimes, one explicit document schema control is enabled.
- * Please see addMetadataToSummary() as well
+ * Please see getMetadata() as well
  */
 function lastMessageFromMetadata(metadata: IContainerRuntimeMetadata | undefined) {
 	return metadata?.documentSchema?.runtime?.explicitSchemaControl
@@ -887,7 +888,7 @@ export class ContainerRuntime
 				// Message to OCEs:
 				// You can hit this error with runtimeSequenceNumber === -1 in < 2.0 RC3 builds.
 				// This would indicate that explicit schema control is enabled in current (2.0 RC3+) builds and it
-				// results in addMetadataToSummary() creating a poison pill for older runtimes in the form of a -1 sequence number.
+				// results in getMetadata() creating a poison pill for older runtimes in the form of a -1 sequence number.
 				// Older runtimes do not understand new schema, and thus could corrupt document if they proceed, thus we are using
 				// this poison pill to prevent them from proceeding.
 
@@ -2257,8 +2258,7 @@ export class ContainerRuntime
 		return this.channelCollection.internalId(maybeAlias);
 	}
 
-	/** Adds the container's metadata to the given summary tree. */
-	private addMetadataToSummary(summaryTree: ISummaryTreeWithStats) {
+	private getMetadata(): IContainerRuntimeMetadata {
 		// The last message processed at the time of summary. If there are no new messages, use the message from the
 		// last summary.
 		const message =
@@ -2290,8 +2290,7 @@ export class ContainerRuntime
 			lastMessage: explicitSchemaControl ? message : undefined,
 			documentSchema,
 		};
-
-		addBlobToSummary(summaryTree, metadataBlobName, JSON.stringify(metadata));
+		return metadata;
 	}
 
 	protected addContainerStateToSummary(
@@ -2300,7 +2299,50 @@ export class ContainerRuntime
 		trackState: boolean,
 		telemetryContext?: ITelemetryContext,
 	) {
-		this.addMetadataToSummary(summaryTree);
+		addBlobToSummary(summaryTree, metadataBlobName, JSON.stringify(this.getMetadata()));
+
+		if (this._idCompressor) {
+			const idCompressorState = JSON.stringify(this._idCompressor.serialize(false));
+			addBlobToSummary(summaryTree, idCompressorBlobName, idCompressorState);
+		}
+
+		if (this.remoteMessageProcessor.partialMessages.size > 0) {
+			const content = JSON.stringify([...this.remoteMessageProcessor.partialMessages]);
+			addBlobToSummary(summaryTree, chunksBlobName, content);
+		}
+
+		const dataStoreAliases = this.channelCollection.aliases;
+		if (dataStoreAliases.size > 0) {
+			addBlobToSummary(summaryTree, aliasBlobName, JSON.stringify([...dataStoreAliases]));
+		}
+
+		if (this.summarizerClientElection) {
+			const electedSummarizerContent = JSON.stringify(
+				this.summarizerClientElection?.serialize(),
+			);
+			addBlobToSummary(summaryTree, electedSummarizerBlobName, electedSummarizerContent);
+		}
+
+		const blobManagerSummary = this.blobManager.summarize();
+		// Some storage (like git) doesn't allow empty tree, so we can omit it.
+		// and the blob manager can handle the tree not existing when loading
+		if (Object.keys(blobManagerSummary.summary.tree).length > 0) {
+			addSummarizeResultToSummary(summaryTree, blobsTreeName, blobManagerSummary);
+		}
+
+		const gcSummary = this.garbageCollector.summarize(fullTree, trackState, telemetryContext);
+		if (gcSummary !== undefined) {
+			addSummarizeResultToSummary(summaryTree, gcTreeKey, gcSummary);
+		}
+	}
+
+	protected addContainerStateToSummary2(
+		summaryTree: ISummaryTreeWithStats,
+		fullTree: boolean,
+		trackState: boolean,
+		telemetryContext?: ITelemetryContext,
+	) {
+		addBlobToSummary(summaryTree, metadataBlobName, JSON.stringify(this.getMetadata()));
 
 		if (this._idCompressor) {
 			const idCompressorState = JSON.stringify(this._idCompressor.serialize(false));
@@ -3291,6 +3333,11 @@ export class ContainerRuntime
 				trackState,
 				telemetryContext,
 			);
+
+			const summaryBuilder = new SummaryBuilder("", "", fullTree);
+			await this.summarize2({ summaryBuilder, ...options, fullTree });
+			const summary2 = summaryBuilder.getSummaryTree();
+			assert(summary2 !== undefined, "");
 
 			assert(
 				summary.type === SummaryType.Tree,

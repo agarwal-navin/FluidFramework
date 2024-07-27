@@ -19,6 +19,7 @@ import { RedBlackTree } from "@fluidframework/merge-tree/internal";
 import type {
 	ISummaryTreeWithStats,
 	ITelemetryContext,
+	ISummaryBuilder,
 } from "@fluidframework/runtime-definitions/internal";
 import { SummaryTreeBuilder } from "@fluidframework/runtime-utils/internal";
 import type { IFluidSerializer } from "@fluidframework/shared-object-base/internal";
@@ -669,6 +670,16 @@ export class SharedDirectory
 		return this.serializeDirectory(this.root, serializer);
 	}
 
+	protected summarizeCore2(
+		summaryBuilder: ISummaryBuilder,
+		serializer: IFluidSerializer,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext,
+	): void {
+		return this.serializeDirectory2(this.root, serializer, summaryBuilder, telemetryContext);
+	}
+
 	/**
 	 * Submits an operation
 	 * @param op - Op to submit
@@ -1103,6 +1114,71 @@ export class SharedDirectory
 		builder.addBlob(snapshotFileName, JSON.stringify(newFormat));
 
 		return builder.getSummaryTree();
+	}
+
+	private serializeDirectory2(
+		root: SubDirectory,
+		serializer: IFluidSerializer,
+		summaryBuilder: ISummaryBuilder,
+		telemetryContext?: ITelemetryContext,
+	): void {
+		const MinValueSizeSeparateSnapshotBlob = 8 * 1024;
+
+		let counter = 0;
+		const blobs: string[] = [];
+
+		const stack: [SubDirectory, IDirectoryDataObject][] = [];
+		const content: IDirectoryDataObject = {};
+		stack.push([root, content]);
+
+		while (stack.length > 0) {
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+			const [currentSubDir, currentSubDirObject] = stack.pop()!;
+			currentSubDirObject.ci = currentSubDir.getSerializableCreateInfo();
+			for (const [key, value] of currentSubDir.getSerializedStorage(serializer)) {
+				if (!currentSubDirObject.storage) {
+					currentSubDirObject.storage = {};
+				}
+				// eslint-disable-next-line import/no-deprecated
+				const result: ISerializableValue = {
+					type: value.type,
+					value: value.value && (JSON.parse(value.value) as object),
+				};
+				if (value.value && value.value.length >= MinValueSizeSeparateSnapshotBlob) {
+					const extraContent: IDirectoryDataObject = {};
+					let largeContent = extraContent;
+					if (currentSubDir.absolutePath !== posix.sep) {
+						for (const dir of currentSubDir.absolutePath.slice(1).split(posix.sep)) {
+							const subDataObject: IDirectoryDataObject = {};
+							largeContent.subdirectories = { [dir]: subDataObject };
+							largeContent = subDataObject;
+						}
+					}
+					largeContent.storage = { [key]: result };
+					const blobName = `blob${counter}`;
+					counter++;
+					blobs.push(blobName);
+					summaryBuilder.addBlob(blobName, JSON.stringify(extraContent));
+				} else {
+					currentSubDirObject.storage[key] = result;
+				}
+			}
+
+			for (const [subdirName, subdir] of currentSubDir.subdirectories()) {
+				if (!currentSubDirObject.subdirectories) {
+					currentSubDirObject.subdirectories = {};
+				}
+				const subDataObject: IDirectoryDataObject = {};
+				currentSubDirObject.subdirectories[subdirName] = subDataObject;
+				stack.push([subdir as SubDirectory, subDataObject]);
+			}
+		}
+
+		const newFormat: IDirectoryNewStorageFormat = {
+			blobs,
+			content,
+		};
+		summaryBuilder.addBlob(snapshotFileName, JSON.stringify(newFormat));
 	}
 }
 

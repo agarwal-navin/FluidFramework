@@ -157,6 +157,14 @@ describeCompat("Summaries", "NoCompat", (getTestObjectProvider, apis) => {
 		assert(ackNackResult.success, "summary op should be acked");
 	});
 
+	describe.only("New incremental summaries", () => {
+		it("simple summary", async () => {
+			const { summarizer } = await createMainContainerAndSummarizer();
+			const result = await summarizeNow(summarizer);
+			assert(result !== undefined);
+		});
+	});
+
 	it("should fail on demand summary on stopped summarizer", async () => {
 		const { summarizer } = await createMainContainerAndSummarizer();
 		let result: ISummarizeResults | undefined = summarizer.summarizeOnDemand({

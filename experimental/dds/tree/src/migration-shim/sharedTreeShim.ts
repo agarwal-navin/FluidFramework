@@ -18,6 +18,7 @@ import {
 	type IGarbageCollectionData,
 	type ISummaryTreeWithStats,
 	type ITelemetryContext,
+	type ISummaryBuilder,
 } from '@fluidframework/runtime-definitions/internal';
 import { type ITree } from '@fluidframework/tree';
 
@@ -79,6 +80,12 @@ export class SharedTreeShim implements IShim {
 	): Promise<ISummaryTreeWithStats> {
 		return this.currentTree.summarize(fullTree, trackState, telemetryContext, incrementalSummaryContext);
 	}
+	public async summarize2(
+		summaryBuilder: ISummaryBuilder,
+		latestSummarySequenceNumber: number,
+		fullTree: boolean,
+		telemetryContext: ITelemetryContext
+	): Promise<void> {}
 	public isAttached(): boolean {
 		return this.currentTree.isAttached();
 	}

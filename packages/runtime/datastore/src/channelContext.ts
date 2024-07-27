@@ -145,24 +145,23 @@ export async function summarizeChannelAsync(
 	return summarizeResult;
 }
 
-// export async function summarizeChannelAsync2(
-// 	channel: IChannel,
-// 	summaryBuilder: ISummaryBuilder,
-// 	latestSummarySequenceNumber: number,
-// 	fullTree: boolean,
-// 	telemetryContext: ITelemetryContext,
-// ): Promise<void> {
-// 	const summarizeResult = await channel.summarize(
-// 		fullTree,
-// 		trackState,
-// 		telemetryContext,
-// 		incrementalSummaryContext,
-// 	);
+export async function summarizeChannelAsync2(
+	channel: IChannel,
+	summaryBuilder: ISummaryBuilder,
+	latestSummarySequenceNumber: number,
+	fullTree: boolean,
+	telemetryContext: ITelemetryContext,
+): Promise<void> {
+	await channel.summarize2(
+		summaryBuilder,
+		latestSummarySequenceNumber,
+		fullTree,
+		telemetryContext,
+	);
 
-// 	// Add the channel attributes to the returned result.
-// 	addBlobToSummary(summarizeResult, attributesBlobKey, JSON.stringify(channel.attributes));
-// 	return summarizeResult;
-// }
+	// Add the channel attributes to the returned result.
+	summaryBuilder.addBlob(attributesBlobKey, JSON.stringify(channel.attributes));
+}
 
 export async function loadChannelFactoryAndAttributes(
 	dataStoreContext: IFluidDataStoreContext,

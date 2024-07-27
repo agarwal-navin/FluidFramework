@@ -768,7 +768,7 @@ export class FluidDataStoreRuntime
 		const channelsBuilder = summaryBuilder.createChildBuilder(".channels", fullTree);
 		await this.visitContextsDuringSummary(
 			async (contextId: string, context: IChannelContext) => {
-				const contextSummaryBuilder = summaryBuilder.createChildBuilder(contextId, fullTree);
+				const contextSummaryBuilder = channelsBuilder.createChildBuilder(contextId, fullTree);
 				await context.summarize2(
 					contextSummaryBuilder,
 					latestSummarySequenceNumber,

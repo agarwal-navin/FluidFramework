@@ -748,7 +748,26 @@ export abstract class SharedObject<
 		latestSummarySequenceNumber: number,
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
-	): Promise<void> {}
+	): Promise<void> {
+		(this as any).summarizeCore2?.(
+			summaryBuilder,
+			this.serializer,
+			latestSummarySequenceNumber,
+			fullTree,
+			telemetryContext,
+		);
+		const tree = summaryBuilder.getSummaryTree();
+		this.incrementTelemetryMetric(
+			blobCountPropertyName,
+			tree.stats.blobNodeCount,
+			telemetryContext,
+		);
+		this.incrementTelemetryMetric(
+			totalBlobSizePropertyName,
+			tree.stats.totalBlobSize,
+			telemetryContext,
+		);
+	}
 
 	/**
 	 * {@inheritDoc (ISharedObject:interface).getGCData}
@@ -800,6 +819,14 @@ export abstract class SharedObject<
 		telemetryContext?: ITelemetryContext,
 		incrementalSummaryContext?: IExperimentalIncrementalSummaryContext,
 	): ISummaryTreeWithStats;
+
+	// protected abstract summarizeCore2?(
+	// 	summaryBuilder: ISummaryBuilder,
+	// 	serializer: IFluidSerializer,
+	// 	latestSummarySequenceNumber: number,
+	// 	fullTree: boolean,
+	// 	telemetryContext: ITelemetryContext,
+	// ): void;
 
 	private incrementTelemetryMetric(
 		propertyName: string,

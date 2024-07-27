@@ -554,7 +554,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 		private readonly fullTree: boolean,
 		private readonly parentBuilder?: SummaryBuilder,
 	) {
-		this.fullPath = `${this.parentPath}/id`;
+		this.fullPath = `${this.parentPath === "/" ? "" : this.parentPath}/${id}`;
 		this.summaryStats = mergeStats();
 		this.summaryStats.treeNodeCount++;
 	}
@@ -564,6 +564,10 @@ export class SummaryBuilder implements ISummaryBuilder {
 			type: SummaryType.Tree,
 			tree: { ...this.summaryTree },
 		};
+	}
+
+	public getSummaryTree(): ISummaryTreeWithStats {
+		return { summary: this.summary, stats: this.stats };
 	}
 
 	public get stats(): Readonly<ISummaryStats> {
