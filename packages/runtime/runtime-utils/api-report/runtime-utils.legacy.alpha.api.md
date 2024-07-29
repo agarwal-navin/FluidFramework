@@ -61,6 +61,30 @@ export abstract class RuntimeFactoryHelper<T = IContainerRuntime> implements IRu
 }
 
 // @alpha (undocumented)
+export class SummaryBuilder implements ISummaryBuilder {
+    // (undocumented)
+    addAttachment(id: string): void;
+    // (undocumented)
+    addBlob(key: string, content: string | Uint8Array): void;
+    // (undocumented)
+    addHandle(key: string, handleType: SummaryType.Tree | SummaryType.Blob | SummaryType.Attachment, handle: string): void;
+    // (undocumented)
+    addTree(key: string, summarizeResult: ISummarizeResult): void;
+    // (undocumented)
+    createBuilderForChild(childId: string, fullTree: boolean): ISummaryBuilder;
+    // (undocumented)
+    static createRootBuilder(fullTree: boolean): ISummaryBuilder;
+    // (undocumented)
+    getSummaryTreeWithStats(): ISummaryTreeWithStats;
+    // (undocumented)
+    nodeDidNotChange(): void;
+    // (undocumented)
+    get stats(): Readonly<ISummaryStats>;
+    // (undocumented)
+    get summaryTree(): ISummaryTree;
+}
+
+// @alpha (undocumented)
 export class SummaryTreeBuilder implements ISummaryTreeWithStats {
     constructor();
     // (undocumented)

@@ -143,8 +143,8 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		if (this.lastProcessedSequenceNumber > latestSummarySequenceNumber && !fullTree) {
-			summaryBuilder.completeSummary(false /* nodeChanged */);
+		if (latestSummarySequenceNumber > this.lastProcessedSequenceNumber && !fullTree) {
+			summaryBuilder.nodeDidNotChange();
 			return;
 		}
 		const channel = await this.getChannel();
@@ -155,7 +155,6 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 			fullTree,
 			telemetryContext,
 		);
-		summaryBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

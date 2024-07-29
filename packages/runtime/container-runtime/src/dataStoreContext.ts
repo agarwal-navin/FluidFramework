@@ -138,6 +138,7 @@ export interface IFluidDataStoreContextProps {
 	readonly storage: IDocumentStorageService;
 	readonly scope: FluidObject;
 	readonly createSummarizerNodeFn: CreateChildSummarizerNodeFn;
+	readonly loadSequenceNumber: number;
 	readonly pkg?: Readonly<string[]>;
 	readonly loadingGroupId?: string;
 }
@@ -622,14 +623,15 @@ export abstract class FluidDataStoreContext
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		if (this.lastProcessedSequenceNumber > latestSummarySequenceNumber && !fullTree) {
-			summaryBuilder.completeSummary(false /* nodeChanged */);
+		if (latestSummarySequenceNumber > this.lastProcessedSequenceNumber && !fullTree) {
+			summaryBuilder.nodeDidNotChange();
 			return;
 		}
 		await this.realize();
+		const channelsBuilder = summaryBuilder.createBuilderForChild(".channels", fullTree);
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 		await this.channel!.summarize2?.(
-			summaryBuilder,
+			channelsBuilder,
 			latestSummarySequenceNumber,
 			fullTree,
 			telemetryContext,
@@ -640,7 +642,7 @@ export abstract class FluidDataStoreContext
 		const attributes = createAttributes(pkg, isRoot);
 		summaryBuilder.addBlob(dataStoreAttributesBlobName, JSON.stringify(attributes));
 
-		const summaryTree = summaryBuilder.getSummaryTree();
+		const summaryTree = summaryBuilder.getSummaryTreeWithStats();
 		// If we are not referenced, mark the summary tree as unreferenced. Also, update unreferenced blob
 		// size in the summary stats with the blobs size of this data store.
 		if (!this.summarizerNode.isReferenced()) {
@@ -652,7 +654,6 @@ export abstract class FluidDataStoreContext
 		if (this.loadingGroupId !== undefined) {
 			summaryTree.summary.groupId = this.loadingGroupId;
 		}
-		summaryBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

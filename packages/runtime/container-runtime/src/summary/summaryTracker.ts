@@ -82,7 +82,6 @@ export class SummaryTracker implements ISummaryTracker {
 			);
 			return;
 		}
-		summaryBuilder.completeSummary(false /* nodeChanged */);
 	}
 
 	public processedMessage(messageSequenceNumber: number) {

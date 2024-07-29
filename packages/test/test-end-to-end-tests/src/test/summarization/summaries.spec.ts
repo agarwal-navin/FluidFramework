@@ -163,6 +163,37 @@ describeCompat("Summaries", "NoCompat", (getTestObjectProvider, apis) => {
 			const result = await summarizeNow(summarizer);
 			assert(result !== undefined);
 		});
+
+		it.only("Incremental DS summary", async () => {
+			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
+			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
+			const dataStore =
+				await mainDataStore._context.containerRuntime.createDataStore(TestDataObjectType);
+			const dataObject2 = (await dataStore.entryPoint.get()) as ITestDataObject;
+			mainDataStore._root.set("ds2", dataObject2.handle);
+
+			await provider.ensureSynchronized();
+			await summarizeNow(summarizer);
+			mainDataStore._root.set("1", "2");
+			await provider.ensureSynchronized();
+			const summaryResult2 = await summarizeNow(summarizer);
+			assert(summaryResult2 !== undefined, "");
+		});
+
+		it("Incremental DDS summary", async () => {
+			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
+			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
+			const dds2 = SharedString.create(mainDataStore._runtime);
+			mainDataStore._root.set("dds2", dds2.handle);
+			const dds3 = SharedString.create(mainDataStore._runtime);
+			mainDataStore._root.set("dds3", dds3.handle);
+
+			await provider.ensureSynchronized();
+			await summarizeNow(summarizer);
+			mainDataStore._root.set("1", "2");
+			const summaryResult2 = await summarizeNow(summarizer);
+			assert(summaryResult2 !== undefined, "");
+		});
 	});
 
 	it("should fail on demand summary on stopped summarizer", async () => {

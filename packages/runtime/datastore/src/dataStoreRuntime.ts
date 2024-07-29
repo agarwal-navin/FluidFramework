@@ -765,10 +765,12 @@ export class FluidDataStoreRuntime
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		const channelsBuilder = summaryBuilder.createChildBuilder(".channels", fullTree);
 		await this.visitContextsDuringSummary(
 			async (contextId: string, context: IChannelContext) => {
-				const contextSummaryBuilder = channelsBuilder.createChildBuilder(contextId, fullTree);
+				const contextSummaryBuilder = summaryBuilder.createBuilderForChild(
+					contextId,
+					fullTree,
+				);
 				await context.summarize2(
 					contextSummaryBuilder,
 					latestSummarySequenceNumber,
@@ -777,7 +779,6 @@ export class FluidDataStoreRuntime
 				);
 			},
 		);
-		channelsBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	/**

@@ -542,68 +542,102 @@ export class GCDataBuilder implements IGarbageCollectionData {
 	}
 }
 
+/**
+ * @legacy
+ * @alpha
+ */
 export class SummaryBuilder implements ISummaryBuilder {
 	private attachmentCounter: number = 0;
-	private readonly summaryTree: { [path: string]: SummaryObject } = {};
-	private summaryStats: ISummaryStats = mergeStats();
 	private readonly fullPath: string;
+	private readonly parentBuilder: SummaryBuilder | undefined;
+	private readonly nodeStateUpdated:
+		| ((changed: boolean, summaryObject: SummaryObject) => void)
+		| undefined;
 
-	constructor(
-		private readonly parentPath: string,
-		private readonly id: string,
-		private readonly fullTree: boolean,
-		private readonly parentBuilder?: SummaryBuilder,
-	) {
-		this.fullPath = `${this.parentPath === "/" ? "" : this.parentPath}/${id}`;
-		this.summaryStats = mergeStats();
-		this.summaryStats.treeNodeCount++;
-	}
-
-	public get summary(): ISummaryTree {
+	private summaryStats: ISummaryStats;
+	private readonly summaryTreeContents: { [path: string]: SummaryObject } = {};
+	private get summaryTree(): ISummaryTree {
 		return {
 			type: SummaryType.Tree,
-			tree: { ...this.summaryTree },
+			tree: this.summaryTreeContents,
 		};
 	}
 
-	public getSummaryTree(): ISummaryTreeWithStats {
-		return { summary: this.summary, stats: this.stats };
+	private get isChild(): boolean {
+		return this.id !== "/";
 	}
 
-	public get stats(): Readonly<ISummaryStats> {
-		return { ...this.summaryStats };
+	public static createRootBuilder(fullTree: boolean): ISummaryBuilder {
+		return new SummaryBuilder("/", fullTree, undefined /* childParams */);
 	}
 
-	public createChildBuilder(childId: string, fullTree: boolean) {
-		return new SummaryBuilder(this.fullPath, childId, fullTree, this);
-	}
-
-	public getChildSummary(id: string): SummaryObject | undefined {
-		return this.summaryTree[id];
-	}
-
-	public completeSummary(nodeChanged: boolean) {
-		if (this.parentBuilder === undefined) {
-			return;
+	private constructor(
+		private readonly id: string,
+		private readonly fullTree: boolean,
+		childParams:
+			| {
+					parentPath: string;
+					parentSummaryStats: ISummaryStats;
+					parentBuilder: SummaryBuilder;
+					nodeStateUpdated: (changed: boolean, summaryObject: SummaryObject) => void;
+			  }
+			| undefined,
+	) {
+		if (this.isChild) {
+			assert(childParams !== undefined, "Child params should be defined for child nodes");
 		}
+		const parentPath = childParams?.parentPath;
+		this.fullPath =
+			parentPath === undefined ? id : `${parentPath === "/" ? "" : parentPath}/${id}`;
+		this.summaryStats = childParams?.parentSummaryStats ?? mergeStats();
+		this.parentBuilder = childParams?.parentBuilder ?? undefined;
+		this.nodeStateUpdated = childParams?.nodeStateUpdated ?? undefined;
+	}
+
+	public getSummaryTreeWithStats(): ISummaryTreeWithStats {
+		return { summary: this.summaryTree, stats: this.summaryStats };
+	}
+
+	public createBuilderForChild(childId: string, fullTree: boolean): ISummaryBuilder {
+		this.nodeStateUpdated?.(true, this.summaryTree);
+		const nodeStateUpdated = (changed: boolean, summaryObject: SummaryObject) => {
+			if (this.summaryTreeContents[childId] !== undefined) {
+				return;
+			}
+			assert(changed || !fullTree, "Summary cannot be a handle when fullTree is enabled");
+			if (changed) {
+				assert(summaryObject.type === SummaryType.Tree, "Summary should be a tree");
+				this.summaryTreeContents[childId] = summaryObject;
+				this.summaryStats.treeNodeCount++;
+			} else {
+				assert(summaryObject.type === SummaryType.Handle, "Summary should be a handle");
+				this.summaryTreeContents[childId] = summaryObject;
+				this.summaryStats.handleNodeCount++;
+			}
+		};
+		return new SummaryBuilder(childId, fullTree, {
+			parentPath: this.fullPath,
+			parentSummaryStats: this.summaryStats,
+			parentBuilder: this,
+			nodeStateUpdated,
+		});
+	}
+
+	public nodeDidNotChange(): void {
+		assert(this.isChild, "Root node cannot be a handle");
 		assert(
-			this.parentBuilder.getChildSummary(this.id) === undefined,
-			"An entry for this node already exists",
+			this.parentBuilder !== undefined,
+			"Parent builder should be defined for non root nodes",
 		);
-		if (nodeChanged) {
-			assert(Object.keys(this.summaryTree).length > 0, "No entries in the summary tree");
-			const summaryTreeWithStats: ISummaryTreeWithStats = {
-				summary: this.summary,
-				stats: this.stats,
-			};
-			this.parentBuilder.addTree(this.id, summaryTreeWithStats);
-		} else {
-			assert(!this.fullTree, "Summary cannot be a handle when fullTree is enabled");
-			this.parentBuilder.addHandle(this.id, SummaryType.Tree, this.fullPath);
-		}
+		this.nodeStateUpdated?.(false, {
+			type: SummaryType.Handle,
+			handle: this.fullPath,
+			handleType: SummaryType.Tree,
+		});
 	}
 
 	public addTree(key: string, summarizeResult: ISummarizeResult): void {
+		this.nodeStateUpdated?.(true, this.summaryTree);
 		this.summaryTree[key] = summarizeResult.summary;
 		this.summaryStats = mergeStats(this.summaryStats, summarizeResult.stats);
 	}
@@ -614,6 +648,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 		handle: string,
 	): void {
 		assert(!this.fullTree, "Cannot add handle when fullTree is enabled");
+		this.nodeStateUpdated?.(true, this.summaryTree);
 		this.summaryTree[key] = {
 			type: SummaryType.Handle,
 			handleType,
@@ -622,17 +657,19 @@ export class SummaryBuilder implements ISummaryBuilder {
 		this.summaryStats.handleNodeCount++;
 	}
 
-	public addAttachment(id: string) {
+	public addAttachment(id: string): void {
+		this.nodeStateUpdated?.(true, this.summaryTree);
 		this.summaryTree[this.attachmentCounter++] = { id, type: SummaryType.Attachment };
 	}
 
 	public addBlob(key: string, content: string | Uint8Array): void {
+		this.nodeStateUpdated?.(true, this.summaryTree);
 		// Prevent cloning by directly referencing underlying private properties
 		addBlobToSummary(
 			{
 				summary: {
 					type: SummaryType.Tree,
-					tree: this.summaryTree,
+					tree: this.summaryTreeContents,
 				},
 				stats: this.summaryStats,
 			},

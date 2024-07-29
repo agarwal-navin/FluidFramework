@@ -756,7 +756,7 @@ export abstract class SharedObject<
 			fullTree,
 			telemetryContext,
 		);
-		const tree = summaryBuilder.getSummaryTree();
+		const tree = summaryBuilder.getSummaryTreeWithStats();
 		this.incrementTelemetryMetric(
 			blobCountPropertyName,
 			tree.stats.blobNodeCount,

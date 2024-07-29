@@ -339,11 +339,11 @@ export interface ISummaryBuilder {
     // (undocumented)
     addTree: (key: string, summarizeResult: ISummarizeResult) => void;
     // (undocumented)
-    completeSummary: (nodeChanged: boolean) => void;
+    createBuilderForChild: (childId: string, fullTree: boolean) => ISummaryBuilder;
     // (undocumented)
-    createChildBuilder: (childId: string, fullTree: boolean) => ISummaryBuilder;
+    getSummaryTreeWithStats: () => ISummaryTreeWithStats;
     // (undocumented)
-    getChildSummary: (id: string) => SummaryObject | undefined;
+    nodeDidNotChange: () => void;
 }
 
 // @alpha

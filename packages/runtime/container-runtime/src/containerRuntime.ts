@@ -1702,6 +1702,7 @@ export class ContainerRuntime
 				}),
 			(path: string) => this.garbageCollector.isNodeDeleted(path),
 			new Map<string, string>(dataStoreAliasMap),
+			this.deltaManager.initialSequenceNumber,
 			async (runtime: ChannelCollection) => provideEntryPoint,
 		);
 
@@ -3337,10 +3338,10 @@ export class ContainerRuntime
 				telemetryContext,
 			);
 
-			const summaryBuilder = new SummaryBuilder("", "", fullTree);
+			const summaryBuilder = SummaryBuilder.createRootBuilder(fullTree);
 			await this.summarize2({ summaryBuilder, ...options, fullTree });
 			this.addContainerStateToSummary2(summaryBuilder, fullTree, telemetryContext);
-			const summary2 = summaryBuilder.getSummaryTree();
+			const summary2 = summaryBuilder.getSummaryTreeWithStats();
 			assert(summary2 !== undefined, "");
 
 			assert(
@@ -3400,9 +3401,11 @@ export class ContainerRuntime
 				);
 			}
 
+			const channelsBuilder = summaryBuilder.createBuilderForChild(".channels", fullTree);
 			await this.channelCollection.summarize2(
-				summaryBuilder,
-				this.lastAckedSummaryContext?.referenceSequenceNumber ?? -1,
+				channelsBuilder,
+				this.lastAckedSummaryContext?.referenceSequenceNumber ??
+					this.deltaManager.initialSequenceNumber,
 				fullTree,
 				telemetryContext,
 			);

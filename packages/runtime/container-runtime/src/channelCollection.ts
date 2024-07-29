@@ -293,6 +293,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 		private readonly gcNodeUpdated: (props: IGCNodeUpdatedProps) => void,
 		private readonly isDataStoreDeleted: (nodePath: string) => boolean,
 		private readonly aliasMap: Map<string, string>,
+		private readonly loadSequenceNumber: number,
 		provideEntryPoint: (runtime: ChannelCollection) => Promise<FluidObject>,
 	) {
 		this.mc = createChildMonitoringContext({ logger: baseLogger });
@@ -341,6 +342,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 						type: CreateSummarizerNodeSource.FromSummary,
 					}),
 					loadingGroupId: value.groupId,
+					loadSequenceNumber: this.loadSequenceNumber,
 				});
 			} else {
 				if (typeof value !== "object") {
@@ -358,6 +360,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 					}),
 					makeLocallyVisibleFn: () => this.makeDataStoreLocallyVisible(key),
 					snapshotTree,
+					loadSequenceNumber: this.loadSequenceNumber,
 				});
 			}
 			this.contexts.addBoundOrRemoted(dataStoreContext);
@@ -481,6 +484,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 				},
 			),
 			pkg,
+			loadSequenceNumber: message.sequenceNumber,
 		});
 
 		this.contexts.addBoundOrRemoted(remoteFluidDataStoreContext);
@@ -695,6 +699,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 					this,
 					createChildLogger({ logger: this.parentContext.baseLogger }),
 				),
+			loadSequenceNumber: this.loadSequenceNumber,
 		});
 
 		this.contexts.addUnbound(context);
@@ -808,6 +813,7 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 			}),
 			makeLocallyVisibleFn: () => this.makeDataStoreLocallyVisible(id),
 			snapshotTree,
+			loadSequenceNumber: this.loadSequenceNumber,
 		});
 		// add to the list of bound or remoted, as this context must be bound
 		// to had an attach message sent, and is the non-detached case is remoted.
@@ -1231,10 +1237,12 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		const channelsBuilder = summaryBuilder.createChildBuilder(".channels", fullTree);
 		await this.visitContextsDuringSummary(
 			async (contextId: string, context: FluidDataStoreContext) => {
-				const contextSummaryBuilder = channelsBuilder.createChildBuilder(contextId, fullTree);
+				const contextSummaryBuilder = summaryBuilder.createBuilderForChild(
+					contextId,
+					fullTree,
+				);
 				await context.summarize2(
 					contextSummaryBuilder,
 					latestSummarySequenceNumber,
@@ -1244,7 +1252,6 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 			},
 			{ fullTree, realizedDuring: "summarize" },
 		);
-		channelsBuilder.completeSummary(true /* nodeChanged */);
 	}
 
 	public async summarize(
