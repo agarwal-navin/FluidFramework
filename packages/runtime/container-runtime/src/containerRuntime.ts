@@ -1353,17 +1353,12 @@ export class ContainerRuntime
 	 */
 	private readonly isSummarizerClient: boolean;
 
-	/**
-	 * The id of the version used to initially load this runtime, or undefined if it's newly created.
-	 */
-	private readonly loadedFromVersionId: string | undefined;
-
 	private readonly isSnapshotInstanceOfISnapshot: boolean | undefined;
 
 	/**
 	 * The summary context of the last acked summary. The properties from this as used when uploading a summary.
 	 */
-	private lastAckedSummaryContext: ISummaryContext | undefined;
+	private lastAckedSummaryContext: ISummaryContext;
 
 	public readonly loadedFromSequenceNumber: number;
 
@@ -1459,7 +1454,6 @@ export class ContainerRuntime
 		this.options = options ?? {};
 		this.clientDetails = clientDetails;
 		this.isSummarizerClient = this.clientDetails.type === summarizerClientType;
-		this.loadedFromVersionId = context.getLoadedFromVersion()?.id;
 		this._getClientId = () => context.clientId;
 		this._getAttachState = () => context.attachState;
 		this.getAbsoluteUrl = async (relativeUrl: string) => {
@@ -1475,6 +1469,12 @@ export class ContainerRuntime
 		// customer should observe dirty state on the runtime (the owner of dirty state) directly, rather than on the IContainer.
 		this.on("dirty", () => context.updateDirtyContainerState(true));
 		this.on("saved", () => context.updateDirtyContainerState(false));
+
+		this.lastAckedSummaryContext = {
+			proposalHandle: undefined,
+			ackHandle: context.getLoadedFromVersion()?.id,
+			referenceSequenceNumber: deltaManager.initialSequenceNumber,
+		};
 
 		// In old loaders without dispose functionality, closeFn is equivalent but will also switch container to readonly mode
 		this.disposeFn = disposeFn ?? closeFn;
@@ -3344,7 +3344,7 @@ export class ContainerRuntime
 			await this.summarize2({ summaryBuilder, ...options, fullTree });
 			this.addContainerStateToSummary2(summaryBuilder, fullTree, telemetryContext);
 			const summary2 = summaryBuilder.getSummaryTreeWithStats();
-			assert(summary2 !== undefined, "");
+			assert(summary2 !== undefined, "Summary 2 not available");
 
 			assert(
 				summary1.summary.type === SummaryType.Tree,
@@ -3404,10 +3404,13 @@ export class ContainerRuntime
 			}
 
 			const channelsBuilder = summaryBuilder.createBuilderForChild(".channels", fullTree);
+			const latestSummarySequenceNumber =
+				this.deltaManager.initialSequenceNumber === 0
+					? -1
+					: this.lastAckedSummaryContext.referenceSequenceNumber;
 			await this.channelCollection.summarize2(
 				channelsBuilder,
-				this.lastAckedSummaryContext?.referenceSequenceNumber ??
-					this.deltaManager.initialSequenceNumber,
+				latestSummarySequenceNumber,
 				fullTree,
 				telemetryContext,
 			);
@@ -3747,7 +3750,7 @@ export class ContainerRuntime
 				if (lastAckedContext !== this.lastAckedSummaryContext) {
 					return {
 						continue: false,
-						error: `Last summary changed while summarizing. ${this.lastAckedSummaryContext} !== ${lastAckedContext}`,
+						error: `Last summary changed while summarizing. ${JSON.stringify(this.lastAckedSummaryContext)} !== ${JSON.stringify(lastAckedContext)}`,
 					};
 				}
 				return { continue: true };
@@ -3858,8 +3861,8 @@ export class ContainerRuntime
 			}
 
 			const summaryContext: ISummaryContext = {
-				proposalHandle: this.lastAckedSummaryContext?.proposalHandle ?? undefined,
-				ackHandle: this.lastAckedSummaryContext?.ackHandle ?? this.loadedFromVersionId,
+				proposalHandle: this.lastAckedSummaryContext.proposalHandle,
+				ackHandle: this.lastAckedSummaryContext.ackHandle,
 				referenceSequenceNumber: summaryRefSeqNum,
 			};
 

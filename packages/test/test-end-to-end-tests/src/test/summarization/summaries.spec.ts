@@ -197,7 +197,7 @@ describeCompat("Summaries", "NoCompat", (getTestObjectProvider, apis) => {
 			assert(summaryResult2 !== undefined, "");
 		});
 
-		it.only("Attachment blob summary", async () => {
+		it("Attachment blob summary", async () => {
 			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
 			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
 			const blobContents1 = "Blob contents 1";
