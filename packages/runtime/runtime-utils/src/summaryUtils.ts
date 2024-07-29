@@ -562,17 +562,14 @@ export class SummaryBuilder implements ISummaryBuilder {
 			tree: this.summaryTreeContents,
 		};
 	}
-
-	private get isChild(): boolean {
-		return this.id !== "/";
-	}
+	private readonly isRoot: boolean;
 
 	public static createRootBuilder(fullTree: boolean): ISummaryBuilder {
 		return new SummaryBuilder("/", fullTree, undefined /* childParams */);
 	}
 
 	private constructor(
-		private readonly id: string,
+		id: string,
 		private readonly fullTree: boolean,
 		childParams:
 			| {
@@ -583,15 +580,16 @@ export class SummaryBuilder implements ISummaryBuilder {
 			  }
 			| undefined,
 	) {
-		if (this.isChild) {
-			assert(childParams !== undefined, "Child params should be defined for child nodes");
-		}
+		this.isRoot = childParams === undefined;
 		const parentPath = childParams?.parentPath;
 		this.fullPath =
 			parentPath === undefined ? id : `${parentPath === "/" ? "" : parentPath}/${id}`;
 		this.summaryStats = childParams?.parentSummaryStats ?? mergeStats();
 		this.parentBuilder = childParams?.parentBuilder ?? undefined;
 		this.nodeStateUpdated = childParams?.nodeStateUpdated ?? undefined;
+		if (this.isRoot) {
+			this.summaryStats.treeNodeCount++;
+		}
 	}
 
 	public getSummaryTreeWithStats(): ISummaryTreeWithStats {
@@ -599,18 +597,21 @@ export class SummaryBuilder implements ISummaryBuilder {
 	}
 
 	public createBuilderForChild(childId: string, fullTree: boolean): ISummaryBuilder {
-		this.nodeStateUpdated?.(true, this.summaryTree);
+		this.nodeStateUpdated?.(true /* changed */, this.summaryTree);
 		const nodeStateUpdated = (changed: boolean, summaryObject: SummaryObject) => {
 			if (this.summaryTreeContents[childId] !== undefined) {
 				return;
 			}
 			assert(changed || !fullTree, "Summary cannot be a handle when fullTree is enabled");
 			if (changed) {
-				assert(summaryObject.type === SummaryType.Tree, "Summary should be a tree");
+				assert(summaryObject.type === SummaryType.Tree, "Summary should be a tree if changed");
 				this.summaryTreeContents[childId] = summaryObject;
 				this.summaryStats.treeNodeCount++;
 			} else {
-				assert(summaryObject.type === SummaryType.Handle, "Summary should be a handle");
+				assert(
+					summaryObject.type === SummaryType.Handle,
+					"Summary should be a handle if not changed",
+				);
 				this.summaryTreeContents[childId] = summaryObject;
 				this.summaryStats.handleNodeCount++;
 			}
@@ -624,7 +625,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 	}
 
 	public nodeDidNotChange(): void {
-		assert(this.isChild, "Root node cannot be a handle");
+		assert(!this.isRoot, "Root node cannot be a handle");
 		assert(
 			this.parentBuilder !== undefined,
 			"Parent builder should be defined for non root nodes",
@@ -638,7 +639,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 
 	public addTree(key: string, summarizeResult: ISummarizeResult): void {
 		this.nodeStateUpdated?.(true, this.summaryTree);
-		this.summaryTree[key] = summarizeResult.summary;
+		this.summaryTreeContents[key] = summarizeResult.summary;
 		this.summaryStats = mergeStats(this.summaryStats, summarizeResult.stats);
 	}
 
@@ -649,7 +650,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 	): void {
 		assert(!this.fullTree, "Cannot add handle when fullTree is enabled");
 		this.nodeStateUpdated?.(true, this.summaryTree);
-		this.summaryTree[key] = {
+		this.summaryTreeContents[key] = {
 			type: SummaryType.Handle,
 			handleType,
 			handle,
@@ -659,7 +660,7 @@ export class SummaryBuilder implements ISummaryBuilder {
 
 	public addAttachment(id: string): void {
 		this.nodeStateUpdated?.(true, this.summaryTree);
-		this.summaryTree[this.attachmentCounter++] = { id, type: SummaryType.Attachment };
+		this.summaryTreeContents[this.attachmentCounter++] = { id, type: SummaryType.Attachment };
 	}
 
 	public addBlob(key: string, content: string | Uint8Array): void {

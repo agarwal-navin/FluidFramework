@@ -5,7 +5,7 @@
 
 import { strict as assert } from "assert";
 
-import { bufferToString } from "@fluid-internal/client-utils";
+import { bufferToString, stringToBuffer } from "@fluid-internal/client-utils";
 import {
 	ITestDataObject,
 	TestDataObjectType,
@@ -20,6 +20,7 @@ import {
 } from "@fluidframework/container-runtime/internal";
 import { ISummaryBlob, ISummaryTree, SummaryType } from "@fluidframework/driver-definitions";
 import { ISummaryContext } from "@fluidframework/driver-definitions/internal";
+import { SharedDirectory } from "@fluidframework/map/internal";
 import {
 	FlushMode,
 	IFluidDataStoreFactory,
@@ -164,7 +165,7 @@ describeCompat("Summaries", "NoCompat", (getTestObjectProvider, apis) => {
 			assert(result !== undefined);
 		});
 
-		it.only("Incremental DS summary", async () => {
+		it("Incremental DS summary", async () => {
 			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
 			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
 			const dataStore =
@@ -183,14 +184,35 @@ describeCompat("Summaries", "NoCompat", (getTestObjectProvider, apis) => {
 		it("Incremental DDS summary", async () => {
 			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
 			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
-			const dds2 = SharedString.create(mainDataStore._runtime);
+			const dds2 = SharedDirectory.create(mainDataStore._runtime);
 			mainDataStore._root.set("dds2", dds2.handle);
-			const dds3 = SharedString.create(mainDataStore._runtime);
+			const dds3 = SharedDirectory.create(mainDataStore._runtime);
 			mainDataStore._root.set("dds3", dds3.handle);
 
 			await provider.ensureSynchronized();
 			await summarizeNow(summarizer);
 			mainDataStore._root.set("1", "2");
+			await provider.ensureSynchronized();
+			const summaryResult2 = await summarizeNow(summarizer);
+			assert(summaryResult2 !== undefined, "");
+		});
+
+		it.only("Attachment blob summary", async () => {
+			const { mainContainer, summarizer } = await createMainContainerAndSummarizer();
+			const mainDataStore = (await mainContainer.getEntryPoint()) as ITestDataObject;
+			const blobContents1 = "Blob contents 1";
+			const blobHandle = await mainDataStore._context.uploadBlob(
+				stringToBuffer(blobContents1, "utf-8"),
+			);
+			mainDataStore._root.set("blob1", blobHandle);
+			const blobContents2 = "Blob contents 1";
+			const blobHandle2 = await mainDataStore._context.uploadBlob(
+				stringToBuffer(blobContents2, "utf-8"),
+			);
+			mainDataStore._root.set("blob2", blobHandle2);
+
+			await provider.ensureSynchronized();
+			await summarizeNow(summarizer);
 			const summaryResult2 = await summarizeNow(summarizer);
 			assert(summaryResult2 !== undefined, "");
 		});

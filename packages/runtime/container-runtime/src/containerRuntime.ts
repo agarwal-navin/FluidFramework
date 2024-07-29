@@ -1365,6 +1365,8 @@ export class ContainerRuntime
 	 */
 	private lastAckedSummaryContext: ISummaryContext | undefined;
 
+	public readonly loadedFromSequenceNumber: number;
+
 	/**
 	 * It a cache for holding mapping for loading groupIds with its snapshot from the service. Add expiry policy of 1 minute.
 	 * Starting with 1 min and based on recorded usage we can tweak it later on.
@@ -1443,6 +1445,7 @@ export class ContainerRuntime
 		};
 
 		this.innerDeltaManager = deltaManager;
+		this.loadedFromSequenceNumber = deltaManager.initialSequenceNumber;
 
 		// Here we could wrap/intercept on these functions to block/modify outgoing messages if needed.
 		// This makes ContainerRuntime the final gatekeeper for outgoing messages.
@@ -1702,7 +1705,6 @@ export class ContainerRuntime
 				}),
 			(path: string) => this.garbageCollector.isNodeDeleted(path),
 			new Map<string, string>(dataStoreAliasMap),
-			this.deltaManager.initialSequenceNumber,
 			async (runtime: ChannelCollection) => provideEntryPoint,
 		);
 

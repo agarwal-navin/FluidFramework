@@ -65,6 +65,7 @@ export class RemoteChannelContext implements IChannelContext {
 		registry: ISharedObjectRegistry,
 		extraBlobs: Map<string, ArrayBufferLike> | undefined,
 		createSummarizerNode: CreateChildSummarizerNodeFn,
+		loadedFromSequenceNumber: number,
 		attachMessageType?: string,
 	) {
 		assert(!this.id.includes("/"), 0x310 /* Channel context ID cannot contain slashes */);
@@ -73,6 +74,8 @@ export class RemoteChannelContext implements IChannelContext {
 			logger: runtime.logger,
 			namespace: "RemoteChannelContext",
 		});
+
+		this.lastProcessedSequenceNumber = loadedFromSequenceNumber;
 
 		this.services = createChannelServiceEndpoints(
 			dataStoreContext.connected,
@@ -200,7 +203,7 @@ export class RemoteChannelContext implements IChannelContext {
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		if (latestSummarySequenceNumber > this.lastProcessedSequenceNumber && !fullTree) {
+		if (latestSummarySequenceNumber >= this.lastProcessedSequenceNumber && !fullTree) {
 			summaryBuilder.nodeDidNotChange();
 			return;
 		}

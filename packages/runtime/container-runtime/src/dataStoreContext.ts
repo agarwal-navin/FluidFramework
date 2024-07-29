@@ -138,7 +138,7 @@ export interface IFluidDataStoreContextProps {
 	readonly storage: IDocumentStorageService;
 	readonly scope: FluidObject;
 	readonly createSummarizerNodeFn: CreateChildSummarizerNodeFn;
-	readonly loadSequenceNumber: number;
+	readonly loadedFromSequenceNumber: number;
 	readonly pkg?: Readonly<string[]>;
 	readonly loadingGroupId?: string;
 }
@@ -348,6 +348,7 @@ export abstract class FluidDataStoreContext
 	public readonly loadingGroupId: string | undefined;
 	protected pkg?: readonly string[];
 
+	public readonly loadedFromSequenceNumber: number;
 	private lastProcessedSequenceNumber: number = -1;
 
 	constructor(
@@ -365,6 +366,8 @@ export abstract class FluidDataStoreContext
 		this.scope = props.scope;
 		this.pkg = props.pkg;
 		this.loadingGroupId = props.loadingGroupId;
+		this.loadedFromSequenceNumber = props.loadedFromSequenceNumber;
+		this.lastProcessedSequenceNumber = props.loadedFromSequenceNumber;
 
 		// URIs use slashes as delimiters. Handles use URIs.
 		// Thus having slashes in types almost guarantees trouble down the road!
@@ -623,7 +626,7 @@ export abstract class FluidDataStoreContext
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		if (latestSummarySequenceNumber > this.lastProcessedSequenceNumber && !fullTree) {
+		if (latestSummarySequenceNumber >= this.lastProcessedSequenceNumber && !fullTree) {
 			summaryBuilder.nodeDidNotChange();
 			return;
 		}

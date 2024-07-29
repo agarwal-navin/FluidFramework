@@ -54,6 +54,7 @@ describe("RemoteChannelContext Tests", () => {
 				sharedObjectRegistry,
 				undefined,
 				undefined as unknown as CreateChildSummarizerNodeFn,
+				-1 /* loadedFromSequenceNumber */,
 				"SomeAttachMessageType",
 			);
 		assert.throws(

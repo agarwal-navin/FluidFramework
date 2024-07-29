@@ -50,6 +50,7 @@ describe("LocalChannelContext Tests", () => {
 				dataStoreContext.baseLogger,
 				() => {},
 				(s: string) => {},
+				-1 /* loadedFromSequenceNumber */,
 			);
 		assert.throws(
 			codeBlock,
@@ -72,6 +73,7 @@ describe("LocalChannelContext Tests", () => {
 				(content, localOpMetadata) => {},
 				(s: string) => {},
 				null as unknown as ISnapshotTree,
+				-1 /* loadedFromSequenceNumber */,
 			);
 		assert.throws(
 			codeBlock,

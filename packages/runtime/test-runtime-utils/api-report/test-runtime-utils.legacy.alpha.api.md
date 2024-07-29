@@ -329,6 +329,8 @@ export class MockFluidDataStoreContext implements IFluidDataStoreContext {
     // (undocumented)
     isLocalDataStore: boolean;
     // (undocumented)
+    readonly loadedFromSequenceNumber = -1;
+    // (undocumented)
     makeLocallyVisible(): void;
     // (undocumented)
     off(event: string | symbol, listener: (...args: any[]) => void): this;

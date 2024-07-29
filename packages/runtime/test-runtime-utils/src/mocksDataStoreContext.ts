@@ -55,6 +55,7 @@ export class MockFluidDataStoreContext implements IFluidDataStoreContext {
 	public idCompressor: IIdCompressorCore & IIdCompressor = undefined as any;
 	public readonly gcThrowOnTombstoneUsage = false;
 	public readonly gcTombstoneEnforcementAllowed = false;
+	public readonly loadedFromSequenceNumber = -1;
 
 	/**
 	 * Indicates the attachment state of the data store to a host service.

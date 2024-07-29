@@ -441,6 +441,7 @@ export interface IFluidParentContext
 
 	readonly gcThrowOnTombstoneUsage: boolean;
 	readonly gcTombstoneEnforcementAllowed: boolean;
+	readonly loadedFromSequenceNumber: number;
 
 	/**
 	 * Returns the current quorum.

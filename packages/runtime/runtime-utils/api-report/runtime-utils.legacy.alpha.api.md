@@ -78,10 +78,6 @@ export class SummaryBuilder implements ISummaryBuilder {
     getSummaryTreeWithStats(): ISummaryTreeWithStats;
     // (undocumented)
     nodeDidNotChange(): void;
-    // (undocumented)
-    get stats(): Readonly<ISummaryStats>;
-    // (undocumented)
-    get summaryTree(): ISummaryTree;
 }
 
 // @alpha (undocumented)

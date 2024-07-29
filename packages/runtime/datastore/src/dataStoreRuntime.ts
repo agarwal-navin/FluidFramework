@@ -291,6 +291,7 @@ export class FluidDataStoreRuntime
 						this.dataStoreContext.getCreateChildSummarizerNodeFn(path, {
 							type: CreateSummarizerNodeSource.FromSummary,
 						}),
+						this.dataStoreContext.loadedFromSequenceNumber,
 					);
 				}
 
@@ -499,6 +500,7 @@ export class FluidDataStoreRuntime
 			this.logger,
 			(content, localOpMetadata) => this.submitChannelOp(channel.id, content, localOpMetadata),
 			(address: string) => this.setChannelDirty(address),
+			this.dataStoreContext.loadedFromSequenceNumber,
 		);
 		this.contexts.set(channel.id, context);
 	}
@@ -518,6 +520,7 @@ export class FluidDataStoreRuntime
 			(content, localOpMetadata) => this.submitChannelOp(id, content, localOpMetadata),
 			(address: string) => this.setChannelDirty(address),
 			tree,
+			this.dataStoreContext.loadedFromSequenceNumber,
 			flatBlobs,
 		);
 	}
@@ -628,6 +631,7 @@ export class FluidDataStoreRuntime
 	private createRemoteChannelContext(
 		attachMessage: IAttachMessage,
 		summarizerNodeParams: CreateChildSummarizerNodeParam,
+		messageSequenceNumber: number,
 	) {
 		const flatBlobs = new Map<string, ArrayBufferLike>();
 		const snapshotTree = buildSnapshotTree(attachMessage.snapshot.entries, flatBlobs);
@@ -647,6 +651,7 @@ export class FluidDataStoreRuntime
 				attachMessage.id,
 				summarizerNodeParams,
 			),
+			messageSequenceNumber,
 			attachMessage.type,
 		);
 	}
@@ -691,6 +696,7 @@ export class FluidDataStoreRuntime
 						const remoteChannelContext = this.createRemoteChannelContext(
 							attachMessage,
 							summarizerNodeParams,
+							message.sequenceNumber,
 						);
 						this.contexts.set(id, remoteChannelContext);
 					}

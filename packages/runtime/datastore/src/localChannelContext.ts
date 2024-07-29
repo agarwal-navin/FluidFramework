@@ -50,8 +50,10 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 		protected readonly runtime: IFluidDataStoreRuntime,
 		protected readonly services: Lazy<ChannelServiceEndpoints>,
 		private readonly channelP: Promise<IChannel>,
+		loadedFromSequenceNumber: number,
 		private _channel?: IChannel,
 	) {
+		this.lastProcessedSequenceNumber = loadedFromSequenceNumber;
 		assert(!this.id.includes("/"), 0x30f /* Channel context ID cannot contain slashes */);
 	}
 
@@ -143,7 +145,7 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
 	): Promise<void> {
-		if (latestSummarySequenceNumber > this.lastProcessedSequenceNumber && !fullTree) {
+		if (latestSummarySequenceNumber >= this.lastProcessedSequenceNumber && !fullTree) {
 			summaryBuilder.nodeDidNotChange();
 			return;
 		}
@@ -235,6 +237,7 @@ export class RehydratedLocalChannelContext extends LocalChannelContextBase {
 		submitFn: (content: any, localOpMetadata: unknown) => void,
 		dirtyFn: (address: string) => void,
 		private readonly snapshotTree: ISnapshotTree,
+		loadedFromSequenceNumber: number,
 		extraBlob?: Map<string, ArrayBufferLike>,
 	) {
 		super(
@@ -295,6 +298,7 @@ export class RehydratedLocalChannelContext extends LocalChannelContextBase {
 					);
 				}
 			}),
+			loadedFromSequenceNumber,
 		);
 
 		this.dirtyFn = () => {
@@ -351,6 +355,7 @@ export class LocalChannelContext extends LocalChannelContextBase {
 		logger: ITelemetryLoggerExt,
 		submitFn: (content: any, localOpMetadata: unknown) => void,
 		dirtyFn: (address: string) => void,
+		loadedFromSequenceNumber: number,
 	) {
 		super(
 			channel.id,
@@ -366,6 +371,7 @@ export class LocalChannelContext extends LocalChannelContextBase {
 				);
 			}),
 			Promise.resolve(channel),
+			loadedFromSequenceNumber,
 			channel,
 		);
 		this.channel = channel;
