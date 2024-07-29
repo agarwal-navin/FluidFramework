@@ -44,7 +44,7 @@ import { ISharedObjectRegistry } from "./dataStoreRuntime.js";
 export abstract class LocalChannelContextBase implements IChannelContext {
 	private globallyVisible = false;
 	protected readonly pending: ISequencedDocumentMessage[] = [];
-	private lastProcessedSequenceNumber: number = -1;
+	protected lastProcessedSequenceNumber: number = -1;
 	constructor(
 		protected readonly id: string,
 		protected readonly runtime: IFluidDataStoreRuntime,
@@ -302,6 +302,10 @@ export class RehydratedLocalChannelContext extends LocalChannelContextBase {
 		);
 
 		this.dirtyFn = () => {
+			// If the context is dirty, set the last processed sequence number to delta manager's last sequence number.
+			// Dirty state is set in response to an op so it is similar to an op being processed. This will ensure that
+			// the context is re-summarized.
+			this.lastProcessedSequenceNumber = dataStoreContext.deltaManager.lastSequenceNumber;
 			dirtyFn(id);
 		};
 	}
@@ -377,6 +381,10 @@ export class LocalChannelContext extends LocalChannelContextBase {
 		this.channel = channel;
 
 		this.dirtyFn = () => {
+			// If the context is dirty, set the last processed sequence number to delta manager's last sequence number.
+			// Dirty state is set in response to an op so it is similar to an op being processed. This will ensure that
+			// the context is re-summarized.
+			this.lastProcessedSequenceNumber = dataStoreContext.deltaManager.lastSequenceNumber;
 			dirtyFn(channel.id);
 		};
 	}

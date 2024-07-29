@@ -843,6 +843,11 @@ export abstract class FluidDataStoreContext
 	public setChannelDirty(address: string): void {
 		this.verifyNotClosed("setChannelDirty");
 
+		// If the channel is dirty, set the last processed sequence number to delta manager's last sequence number.
+		// Dirty state is set in response to an op so it is similar to an op being processed. This will ensure that
+		// the data store is re-summarized.
+		this.lastProcessedSequenceNumber = this.deltaManager.lastSequenceNumber;
+
 		// Get the latest sequence number.
 		const latestSequenceNumber = this.deltaManager.lastSequenceNumber;
 
