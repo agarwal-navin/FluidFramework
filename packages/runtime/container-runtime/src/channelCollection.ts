@@ -77,6 +77,7 @@ import {
 	DeletedResponseHeaderKey,
 	RuntimeHeaderData,
 	defaultRuntimeHeaderData,
+	type IRuntimeMessageWithContext,
 } from "./containerRuntime.js";
 import {
 	IDataStoreAliasMessage,
@@ -818,6 +819,42 @@ export class ChannelCollection implements IFluidDataStoreChannel, IDisposable {
 			// so that on ack of the stashed op, the context is found.
 			// detached client don't send ops, so should not expect and ack.
 			this.pendingAttach.set(message.id, message);
+		}
+	}
+
+	public processMessages(messages: IRuntimeMessageWithContext[]) {
+		for (const messageWithContext of messages) {
+			const { message, local, localOpMetadata } = messageWithContext;
+			switch (message.type) {
+				case ContainerMessageType.Attach:
+					this.processAttachMessage(message, local);
+					return;
+				case ContainerMessageType.Alias:
+					this.processAliasMessage(message, localOpMetadata, local);
+					return;
+				case ContainerMessageType.FluidDataStoreOp: {
+					const envelope = message.contents;
+					const innerContents = envelope.contents as FluidDataStoreMessage;
+					const transformed = {
+						...message,
+						type: innerContents.type,
+						contents: innerContents.content,
+					};
+
+					this.processChannelOp(envelope.address, transformed, local, localOpMetadata);
+
+					// Notify GC of any outbound references that were added by this op.
+					detectOutboundReferences(
+						envelope.address,
+						transformed.contents,
+						(fromPath: string, toPath: string) =>
+							this.parentContext.addedGCOutboundRoute(fromPath, toPath, message.timestamp),
+					);
+					break;
+				}
+				default:
+					assert(false, 0x8e9 /* unreached */);
+			}
 		}
 	}
 
