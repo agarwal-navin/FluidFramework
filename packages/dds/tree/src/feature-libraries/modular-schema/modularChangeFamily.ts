@@ -650,6 +650,8 @@ export class ModularChangeFamily
 		revisionMetadata: RevisionMetadataSource,
 	): NodeChangeset {
 		const nodeExistsConstraint = change1.nodeExistsConstraint ?? change2.nodeExistsConstraint;
+		const outputNodeExistsConstraint =
+			change1.outputNodeExistsConstraint ?? change2.outputNodeExistsConstraint;
 
 		const composedFieldChanges = this.composeFieldMaps(
 			change1.fieldChanges,
@@ -668,6 +670,10 @@ export class ModularChangeFamily
 
 		if (nodeExistsConstraint !== undefined) {
 			composedNodeChange.nodeExistsConstraint = nodeExistsConstraint;
+		}
+
+		if (outputNodeExistsConstraint !== undefined) {
+			composedNodeChange.outputNodeExistsConstraint = outputNodeExistsConstraint;
 		}
 
 		return composedNodeChange;
@@ -878,7 +884,100 @@ export class ModularChangeFamily
 			fieldsWithUnattachedChild: new Set(),
 		};
 
+		const getBaseRevisions = (): RevisionTag[] =>
+			revisionInfoFromTaggedChange(over).map((info) => info.revision);
+
+		const rebaseMetadata: RebaseRevisionMetadata = {
+			...revisionMetadata,
+			getRevisionToRebase: () => taggedChange.revision,
+			getBaseRevisions,
+		};
+
+		const rebasedNodes: ChangeAtomIdBTree<NodeChangeset> = brand(change.nodeChanges.clone());
+
+		const rebasedFields = this.rebaseIntersectingFields(
+			crossFieldTable,
+			rebasedNodes,
+			genId,
+			rebaseMetadata,
+		);
+
+		this.rebaseInvalidatedElements(
+			rebasedFields,
+			rebasedNodes,
+			crossFieldTable,
+			rebaseMetadata,
+			genId,
+		);
+
 		const constraintState = newConstraintState(change.constraintViolationCount ?? 0);
+		const outputConstraintState = newConstraintState(
+			change.outputConstraintViolationCount ?? 0,
+		);
+		this.updateConstraintsForFields(
+			rebasedFields,
+			NodeAttachState.Attached,
+			rebasedNodes,
+			constraintState,
+			outputConstraintState,
+		);
+
+		const rebasedFieldChanges = this.pruneFieldMap(rebasedFields, rebasedNodes);
+		assert(rebasedFieldChanges !== undefined, "");
+		this.updateOutputConstraintsForFields(
+			rebasedFieldChanges,
+			rebasedNodes,
+			NodeAttachState.Attached,
+			outputConstraintState,
+		);
+
+		const rebased = makeModularChangeset({
+			fieldChanges: rebasedFieldChanges,
+			nodeChanges: rebasedNodes,
+			nodeToParent: crossFieldTable.rebasedNodeToParent,
+			nodeAliases: change.nodeAliases,
+			crossFieldKeys: crossFieldTable.rebasedCrossFieldKeys,
+			maxId: idState.maxId,
+			revisions: change.revisions,
+			constraintViolationCount: constraintState.violationCount,
+			outputConstraintViolationCount: outputConstraintState.violationCount,
+			builds: change.builds,
+			destroys: change.destroys,
+			refreshers: change.refreshers,
+		});
+
+		const rebasedTagged = { change: rebased, revision: taggedChange.revision };
+		const rebased2 = this.rebase2(rebasedTagged, rebasedTagged, rebaseMetadata);
+		return rebased2;
+	}
+
+	public rebase2(
+		taggedChange: TaggedChange<ModularChangeset>,
+		over: TaggedChange<ModularChangeset>,
+		revisionMetadata: RevisionMetadataSource,
+	): ModularChangeset {
+		if (hasConflicts(over.change)) {
+			return taggedChange.change;
+		}
+
+		const change = taggedChange.change;
+		const maxId = Math.max(change.maxId ?? -1, over.change.maxId ?? -1);
+		const idState: IdAllocationState = { maxId };
+		const genId: IdAllocator = idAllocatorFromState(idState);
+
+		const crossFieldTable: RebaseTable = {
+			...newCrossFieldTable<FieldChange>(),
+			newChange: change,
+			baseChange: over.change,
+			baseFieldToContext: new Map(),
+			baseToRebasedNodeId: newTupleBTree(),
+			rebasedFields: new Set(),
+			rebasedNodeToParent: brand(change.nodeToParent.clone()),
+			rebasedCrossFieldKeys: brand(change.crossFieldKeys.clone()),
+			nodeIdPairs: [],
+			affectedBaseFields: newTupleBTree(),
+			fieldsWithUnattachedChild: new Set(),
+		};
 
 		const getBaseRevisions = (): RevisionTag[] =>
 			revisionInfoFromTaggedChange(over).map((info) => info.revision);
@@ -895,7 +994,6 @@ export class ModularChangeFamily
 			crossFieldTable,
 			rebasedNodes,
 			genId,
-			constraintState,
 			rebaseMetadata,
 		);
 
@@ -907,28 +1005,24 @@ export class ModularChangeFamily
 			genId,
 		);
 
+		const constraintState = newConstraintState(change.constraintViolationCount ?? 0);
+		const outputConstraintState = newConstraintState(
+			change.outputConstraintViolationCount ?? 0,
+		);
 		this.updateConstraintsForFields(
 			rebasedFields,
 			NodeAttachState.Attached,
-			constraintState,
 			rebasedNodes,
+			constraintState,
+			outputConstraintState,
 		);
 
-		const rebased = makeModularChangeset({
-			fieldChanges: this.pruneFieldMap(rebasedFields, rebasedNodes),
-			nodeChanges: rebasedNodes,
-			nodeToParent: crossFieldTable.rebasedNodeToParent,
-			nodeAliases: change.nodeAliases,
-			crossFieldKeys: crossFieldTable.rebasedCrossFieldKeys,
-			maxId: idState.maxId,
-			revisions: change.revisions,
-			constraintViolationCount: constraintState.violationCount,
-			builds: change.builds,
-			destroys: change.destroys,
-			refreshers: change.refreshers,
-		});
+		const rebased2 = {
+			...taggedChange.change,
+			outputConstraintViolationCount: constraintState.violationCount,
+		};
 
-		return rebased;
+		return rebased2;
 	}
 
 	// This performs a first pass on all fields which have both new and base changes.
@@ -937,7 +1031,6 @@ export class ModularChangeFamily
 		crossFieldTable: RebaseTable,
 		rebasedNodes: ChangeAtomIdBTree<NodeChangeset>,
 		genId: IdAllocator,
-		constraintState: ConstraintState,
 		metadata: RebaseRevisionMetadata,
 	): FieldChangeMap {
 		const change = crossFieldTable.newChange;
@@ -960,7 +1053,6 @@ export class ModularChangeFamily
 				genId,
 				crossFieldTable,
 				metadata,
-				constraintState,
 			);
 
 			setInChangeAtomIdMap(rebasedNodes, newId, rebasedNode);
@@ -1336,7 +1428,6 @@ export class ModularChangeFamily
 		genId: IdAllocator,
 		crossFieldTable: RebaseTable,
 		revisionMetadata: RebaseRevisionMetadata,
-		constraintState: ConstraintState,
 	): NodeChangeset {
 		const change = nodeChangeFromId(crossFieldTable.newChange.nodeChanges, newId);
 		const over = nodeChangeFromId(crossFieldTable.baseChange.nodeChanges, baseId);
@@ -1365,15 +1456,51 @@ export class ModularChangeFamily
 			rebasedChange.nodeExistsConstraint = change.nodeExistsConstraint;
 		}
 
+		if (change?.outputNodeExistsConstraint !== undefined) {
+			rebasedChange.outputNodeExistsConstraint = change.outputNodeExistsConstraint;
+		}
+
 		setInChangeAtomIdMap(crossFieldTable.baseToRebasedNodeId, baseId, newId);
 		return rebasedChange;
+	}
+
+	private updateOutputConstraintsForFields(
+		fields: FieldChangeMap,
+		nodes: ChangeAtomIdBTree<NodeChangeset>,
+		parentAttachState: NodeAttachState,
+		outputConstraintState: ConstraintState,
+	): void {
+		this.updateConstraintsForFieldsCore(
+			fields,
+			parentAttachState,
+			nodes,
+			outputConstraintState,
+			undefined /* constraintState */,
+		);
 	}
 
 	private updateConstraintsForFields(
 		fields: FieldChangeMap,
 		parentAttachState: NodeAttachState,
-		constraintState: ConstraintState,
 		nodes: ChangeAtomIdBTree<NodeChangeset>,
+		constraintState: ConstraintState,
+		outputConstraintState: ConstraintState,
+	): void {
+		this.updateConstraintsForFieldsCore(
+			fields,
+			parentAttachState,
+			nodes,
+			outputConstraintState,
+			constraintState,
+		);
+	}
+
+	private updateConstraintsForFieldsCore(
+		fields: FieldChangeMap,
+		parentAttachState: NodeAttachState,
+		nodes: ChangeAtomIdBTree<NodeChangeset>,
+		outputConstraintState: ConstraintState,
+		constraintState: ConstraintState | undefined,
 	): void {
 		for (const field of fields.values()) {
 			const handler = getChangeHandler(this.fieldKinds, field.fieldKind);
@@ -1383,7 +1510,13 @@ export class ModularChangeFamily
 					parentAttachState === NodeAttachState.Detached || isDetached
 						? NodeAttachState.Detached
 						: NodeAttachState.Attached;
-				this.updateConstraintsForNode(nodeId, attachState, constraintState, nodes);
+				this.updateConstraintsForNode(
+					nodeId,
+					attachState,
+					nodes,
+					outputConstraintState,
+					constraintState,
+				);
 			}
 		}
 	}
@@ -1391,13 +1524,17 @@ export class ModularChangeFamily
 	private updateConstraintsForNode(
 		nodeId: NodeId,
 		attachState: NodeAttachState,
-		constraintState: ConstraintState,
 		nodes: ChangeAtomIdBTree<NodeChangeset>,
+		outputConstraintState: ConstraintState,
+		constraintState: ConstraintState | undefined,
 	): void {
 		const node = nodes.get([nodeId.revision, nodeId.localId]) ?? fail("Unknown node ID");
 		if (node.nodeExistsConstraint !== undefined) {
 			const isNowViolated = attachState === NodeAttachState.Detached;
-			if (node.nodeExistsConstraint.violated !== isNowViolated) {
+			if (
+				constraintState !== undefined &&
+				node.nodeExistsConstraint.violated !== isNowViolated
+			) {
 				node.nodeExistsConstraint = {
 					...node.nodeExistsConstraint,
 					violated: isNowViolated,
@@ -1405,9 +1542,25 @@ export class ModularChangeFamily
 				constraintState.violationCount += isNowViolated ? 1 : -1;
 			}
 		}
+		if (node.outputNodeExistsConstraint !== undefined) {
+			const isNowViolated = attachState === NodeAttachState.Detached;
+			if (node.outputNodeExistsConstraint.violated !== isNowViolated) {
+				node.outputNodeExistsConstraint = {
+					...node.outputNodeExistsConstraint,
+					violated: isNowViolated,
+				};
+				outputConstraintState.violationCount += isNowViolated ? 1 : -1;
+			}
+		}
 
 		if (node.fieldChanges !== undefined) {
-			this.updateConstraintsForFields(node.fieldChanges, attachState, constraintState, nodes);
+			this.updateConstraintsForFieldsCore(
+				node.fieldChanges,
+				attachState,
+				nodes,
+				outputConstraintState,
+				constraintState,
+			);
 		}
 	}
 
@@ -2061,7 +2214,11 @@ export function rebaseRevisionMetadataFromInfo(
 }
 
 function isEmptyNodeChangeset(change: NodeChangeset): boolean {
-	return change.fieldChanges === undefined && change.nodeExistsConstraint === undefined;
+	return (
+		change.fieldChanges === undefined &&
+		change.nodeExistsConstraint === undefined &&
+		change.outputNodeExistsConstraint === undefined
+	);
 }
 
 export function getFieldKind(
@@ -2504,6 +2661,7 @@ function makeModularChangeset(
 		maxId: number;
 		revisions?: readonly RevisionInfo[];
 		constraintViolationCount?: number;
+		outputConstraintViolationCount?: number;
 		builds?: ChangeAtomIdBTree<TreeChunk>;
 		destroys?: ChangeAtomIdBTree<number>;
 		refreshers?: ChangeAtomIdBTree<TreeChunk>;
@@ -2527,6 +2685,12 @@ function makeModularChangeset(
 	}
 	if (props.constraintViolationCount !== undefined && props.constraintViolationCount > 0) {
 		changeset.constraintViolationCount = props.constraintViolationCount;
+	}
+	if (
+		props.outputConstraintViolationCount !== undefined &&
+		props.outputConstraintViolationCount > 0
+	) {
+		changeset.outputConstraintViolationCount = props.outputConstraintViolationCount;
 	}
 	if (props.builds !== undefined && props.builds.size > 0) {
 		changeset.builds = props.builds;
@@ -2685,6 +2849,27 @@ export class ModularEditBuilder extends EditBuilder<ModularChangeset> {
 	public addNodeExistsConstraint(path: UpPath, revision: RevisionTag): void {
 		const nodeChange: NodeChangeset = {
 			nodeExistsConstraint: { violated: false },
+		};
+
+		this.applyChange(
+			tagChange(
+				buildModularChangesetFromNode({
+					path,
+					nodeChange,
+					nodeChanges: newTupleBTree(),
+					nodeToParent: newTupleBTree(),
+					crossFieldKeys: newCrossFieldKeyTable(),
+					idAllocator: this.idAllocator,
+					revision,
+				}),
+				revision,
+			),
+		);
+	}
+
+	public addOutputNodeExistsConstraint(path: UpPath, revision: RevisionTag): void {
+		const nodeChange: NodeChangeset = {
+			outputNodeExistsConstraint: { violated: false },
 		};
 
 		this.applyChange(
