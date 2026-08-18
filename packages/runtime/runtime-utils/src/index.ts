@@ -43,6 +43,7 @@ export {
 	convertToSummaryTree,
 	convertToSummaryTreeWithStats,
 	GCDataBuilder,
+	GCDataTreeBuilder,
 	getBlobSize,
 	mergeStats,
 	processAttachMessageGCData,
@@ -52,6 +53,7 @@ export {
 	TelemetryContext,
 	utf8ByteLength,
 } from "./summaryUtils.js";
+export type { IGCDataBuilderResult } from "./summaryUtils.js";
 export { unpackChildNodesUsedRoutes } from "./unpackUsedRoutes.js";
 export {
 	RuntimeHeaders,

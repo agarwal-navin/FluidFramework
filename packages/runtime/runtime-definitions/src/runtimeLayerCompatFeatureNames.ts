@@ -19,11 +19,13 @@ export const encodeHandlesInContainerRuntime = "encodeHandlesInContainerRuntime"
 export const notifiesReadOnlyState = "notifiesReadOnlyState";
 
 /**
- * This feature indicates that the DataStore layer implements {@link ISummarizable.generateSummary}.
+ * This feature indicates that the DataStore layer implements {@link ISummarizable} - both
+ * {@link ISummarizable.generateSummary} and {@link ISummarizable.generateGCData}.
  *
  * @remarks
- * The generateSummary flow is only used for a data store whose runtime advertises this. A data store from a
- * version that predates the API is summarized with `summarize` instead, since it cannot participate.
+ * The builder-based summarize and GC flows are only used for a data store whose runtime advertises this. A data
+ * store from a version that predates the API is summarized with `summarize` and contributes its full GC data via
+ * `getGCData` instead, since it cannot report that it has not changed.
  *
  * @internal
  */

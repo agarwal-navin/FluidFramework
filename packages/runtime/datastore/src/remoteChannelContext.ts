@@ -14,6 +14,7 @@ import type {
 	IExperimentalIncrementalSummaryContext,
 	ITelemetryContext,
 	IGarbageCollectionData,
+	IGCDataBuilder,
 	CreateChildSummarizerNodeFn,
 	IFluidDataStoreContext,
 	ISummarizeInternalResult,
@@ -316,6 +317,22 @@ export class RemoteChannelContext implements IChannelContext {
 	 */
 	public async getGCData(fullGC: boolean = false): Promise<IGarbageCollectionData> {
 		return this.summarizerNode.getGCData(fullGC);
+	}
+
+	/**
+	 * The counterpart to {@link RemoteChannelContext.getGCData} for the incremental GC flow. The reuse decision is
+	 * made here from this context's own last-changed sequence number rather than by a summarizer node.
+	 */
+	public async generateGCData(
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<void> {
+		if (!fullGC && latestGCSequenceNumber >= this.lastChangedSequenceNumber) {
+			gcBuilder.nodeDidNotChange();
+			return;
+		}
+		gcBuilder.addNodes((await this.getGCDataInternal(fullGC)).gcNodes);
 	}
 
 	/**

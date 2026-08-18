@@ -29,6 +29,7 @@ import type {
 	ISummaryTreeWithStats,
 	ITelemetryContext,
 	IGarbageCollectionData,
+	IGCDataBuilder,
 	ISummarizeResult,
 	ISummaryBuilder,
 	ITelemetryContextExt,
@@ -631,6 +632,113 @@ export class GCDataBuilder implements IGarbageCollectionData {
 		return {
 			gcNodes: this.gcNodes,
 		};
+	}
+}
+
+/**
+ * The GC data built by a {@link GCDataTreeBuilder} tree.
+ * @internal
+ */
+export interface IGCDataBuilderResult {
+	/**
+	 * The nodes that were generated during this run.
+	 */
+	readonly gcData: IGarbageCollectionData;
+	/**
+	 * The absolute paths of nodes that reported no change. The data for these nodes and everything below them
+	 * is absent from `gcData` and must be filled in from the previous run's graph.
+	 */
+	readonly reusedNodePaths: readonly string[];
+}
+
+/**
+ * Builds a container's GC data as a tree that mirrors the node hierarchy, so that an unchanged node can be
+ * skipped instead of regenerating its part of the graph.
+ *
+ * @remarks
+ * Every builder in a tree shares one result object and knows its own absolute path. Because a child's path is
+ * constructed from its parent's, a node reported via {@link GCDataTreeBuilder.nodeDidNotChange} is guaranteed to
+ * own exactly the previous graph's entries at or below that path - the containment is by construction rather
+ * than by convention on how ids happen to be spelled.
+ *
+ * @internal
+ */
+export class GCDataTreeBuilder implements IGCDataBuilder {
+	private constructor(
+		/**
+		 * This node's absolute path, or "" for the root, whose own node is "/".
+		 */
+		private readonly path: string,
+		private readonly gcNodes: { [id: string]: Set<string> },
+		private readonly reusedNodePaths: string[],
+	) {}
+
+	public static createRootBuilder(): GCDataTreeBuilder {
+		return new GCDataTreeBuilder("", {}, []);
+	}
+
+	public createBuilderForChild(childId: string): IGCDataBuilder {
+		const normalizedId = trimTrailingSlashes(trimLeadingSlashes(childId));
+		assert(normalizedId.length > 0, "A GC data builder child must have a non-empty id");
+		return new GCDataTreeBuilder(
+			`${this.path}/${normalizedId}`,
+			this.gcNodes,
+			this.reusedNodePaths,
+		);
+	}
+
+	public addNode(id: string, outboundRoutes: readonly string[]): void {
+		this.gcNodes[this.absoluteId(id)] = new Set(outboundRoutes);
+	}
+
+	public addNodes(gcNodes: { readonly [id: string]: readonly string[] }): void {
+		for (const [id, outboundRoutes] of Object.entries(gcNodes)) {
+			this.addNode(id, outboundRoutes);
+		}
+	}
+
+	public addRouteToAllNodes(outboundRoute: string): void {
+		for (const [id, outboundRoutes] of Object.entries(this.gcNodes)) {
+			if (this.contains(id)) {
+				outboundRoutes.add(outboundRoute);
+			}
+		}
+	}
+
+	public nodeDidNotChange(): void {
+		assert(this.path !== "", "The root GC node cannot be reused");
+		assert(
+			!Object.keys(this.gcNodes).some((id) => this.contains(id)),
+			"A GC node that has already added nodes cannot be reused",
+		);
+		this.reusedNodePaths.push(this.path);
+	}
+
+	/**
+	 * The data built so far. Only meaningful on the root builder.
+	 */
+	public getResult(): IGCDataBuilderResult {
+		const gcNodes: { [id: string]: string[] } = {};
+		for (const [id, outboundRoutes] of Object.entries(this.gcNodes)) {
+			gcNodes[id] = [...outboundRoutes];
+		}
+		return { gcData: { gcNodes }, reusedNodePaths: this.reusedNodePaths };
+	}
+
+	/**
+	 * Whether the given absolute node id is this node or below it.
+	 */
+	private contains(id: string): boolean {
+		return id === this.path || id.startsWith(`${this.path}/`);
+	}
+
+	private absoluteId(id: string): string {
+		const normalizedId = trimTrailingSlashes(trimLeadingSlashes(id));
+		if (normalizedId.length === 0) {
+			// This builder's own node. The root's own node is "/" rather than "".
+			return this.path === "" ? "/" : this.path;
+		}
+		return `${this.path}/${normalizedId}`;
 	}
 }
 

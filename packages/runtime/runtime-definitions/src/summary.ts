@@ -17,6 +17,7 @@ import type { TelemetryEventPropertyTypeExt } from "@fluidframework/telemetry-ut
 import type {
 	IGarbageCollectionData,
 	IGarbageCollectionDetailsBase,
+	IGCDataBuilder,
 } from "./garbageCollectionDefinitions.js";
 
 /**
@@ -461,21 +462,27 @@ export interface ISummaryBuilder {
 }
 
 /**
- * A node in the summary tree that can write its own summary content into an {@link ISummaryBuilder}.
+ * A node in the summary tree that can write its own summary content into an {@link ISummaryBuilder} and its own
+ * garbage collection data into an {@link IGCDataBuilder}.
  *
  * @remarks
- * This is the summarizer-node-free counterpart to the various `summarize` methods. Instead of returning a
- * summary tree, the node writes into the builder it is handed, and all the state needed to decide what may be
- * reused lives in the container runtime and is passed down via `latestSummarySequenceNumber`.
+ * This is the summarizer-node-free counterpart to the various `summarize` and `getGCData` methods. Instead of
+ * returning a summary tree or a GC graph, the node writes into the builder it is handed, and all the state needed
+ * to decide what may be reused lives in the container runtime and is passed down as a reference sequence number.
+ *
+ * Both methods live on one interface because they are two halves of the same flow and ship together - a layer
+ * either supports the builder-based flows or it does not, so there is never a version that has one without the
+ * other.
  *
  * The interface is implemented at every level of the summary tree - the data store runtime, its channels and
  * the shared objects underneath them - so the contract is described once here rather than repeated on each of
  * those interfaces.
  *
  * @privateRemarks
- * `generateSummary` is named for what it does rather than being a suffixed variant of `summarize`, so it does not
- * need renaming when it replaces `summarize` at the end of the rollout - the old method is simply removed. The
- * `generate` verb matches the name the summarize pipeline already uses for this step in its telemetry.
+ * `generateSummary` and `generateGCData` are named for what they do rather than being suffixed variants of
+ * `summarize` and `getGCData`, so they do not need renaming when they replace those at the end of the rollout -
+ * the old methods are simply removed. The `generate` verb matches the name the summarize pipeline already uses
+ * for this step in its telemetry.
  *
  * @legacy @beta
  */
@@ -497,6 +504,23 @@ export interface ISummarizable {
 		latestSummarySequenceNumber: number,
 		fullTree: boolean,
 		telemetryContext: ITelemetryContext,
+	): Promise<void>;
+
+	/**
+	 * Writes this node's garbage collection data into `gcBuilder`, or declares the node unchanged so that the data
+	 * from the previous garbage collection run is reused.
+	 *
+	 * @param gcBuilder - Builder for this node's part of the container's GC graph. A node either adds its nodes to
+	 * it, or calls {@link IGCDataBuilder.nodeDidNotChange} to reuse the previous run's data for its whole subtree.
+	 * @param latestGCSequenceNumber - The sequence number the garbage collector's current graph was captured at, or
+	 * -1 if it has not produced one. Data that has not changed since this sequence number is already in that graph,
+	 * so it can be reused.
+	 * @param fullGC - True to generate the full GC data with no reuse.
+	 */
+	generateGCData(
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
 	): Promise<void>;
 }
 

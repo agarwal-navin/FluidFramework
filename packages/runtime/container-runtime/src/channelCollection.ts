@@ -40,6 +40,7 @@ import type {
 	IFluidDataStoreRegistry,
 	IFluidParentContext,
 	IGarbageCollectionData,
+	IGCDataBuilder,
 	IInboundSignalMessage,
 	InboundAttachMessage,
 	IRuntimeMessageCollection,
@@ -1520,6 +1521,30 @@ export class ChannelCollection
 		// Get the outbound routes and add a GC node for this channel.
 		builder.addNode("/", await this.getOutboundRoutes());
 		return builder.getGCData();
+	}
+
+	/**
+	 * The counterpart to {@link ChannelCollection.getGCData} for the incremental GC flow. Each data store is given a
+	 * child builder that knows its place in the container, so contexts no longer prefix their own node ids, and a
+	 * data store that has not changed contributes nothing.
+	 */
+	public async generateGCData(
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<void> {
+		await this.visitContextsDuringSummary(
+			async (contextId: string, context: FluidDataStoreContext) => {
+				await context.generateGCData(
+					gcBuilder.createBuilderForChild(contextId),
+					latestGCSequenceNumber,
+					fullGC,
+				);
+			},
+			{ fullGC, realizedDuring: "getGCData" },
+		);
+
+		gcBuilder.addNode("/", await this.getOutboundRoutes());
 	}
 
 	/**

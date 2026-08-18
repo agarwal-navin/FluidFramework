@@ -48,6 +48,7 @@ export { IFluidDataStoreRegistry } from "./dataStoreRegistry.js";
 export type {
 	IGarbageCollectionData,
 	IGarbageCollectionDetailsBase,
+	IGCDataBuilder,
 } from "./garbageCollectionDefinitions.js";
 export {
 	gcBlobPrefix,

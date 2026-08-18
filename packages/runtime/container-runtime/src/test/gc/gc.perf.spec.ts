@@ -38,6 +38,8 @@ function createGarbageCollector(gcOptions: IGCRuntimeOptions): GcWithPrivates {
 		getGCData: async () => {
 			return { gcNodes: {} };
 		},
+		generateGCData: async () => ({ gcData: { gcNodes: {} }, reusedNodePaths: [] }),
+		getCurrentSequenceNumber: () => 0,
 		updateUsedRoutes: (usedRoutes: string[]) => {
 			return { totalNodeCount: 0, unusedNodeCount: 0 };
 		},

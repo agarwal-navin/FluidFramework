@@ -143,6 +143,7 @@ import {
 	defaultMinVersionForCollab,
 	exceptionToResponse,
 	GCDataBuilder,
+	GCDataTreeBuilder,
 	isValidMinVersionForCollab,
 	RequestParser,
 	RuntimeHeaders,
@@ -151,6 +152,7 @@ import {
 	SummaryBuilder,
 	TelemetryContext,
 } from "@fluidframework/runtime-utils/internal";
+import type { IGCDataBuilderResult } from "@fluidframework/runtime-utils/internal";
 import type {
 	IEventSampler,
 	IFluidErrorBase,
@@ -4628,6 +4630,31 @@ export class ContainerRuntime
 	}
 
 	/**
+	 * Generates this container's GC data without summarizer nodes, letting each node report that it has not
+	 * changed instead of regenerating its part of the graph.
+	 * @see IGarbageCollectionRuntime.generateGCData
+	 */
+	public async generateGCData(
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<IGCDataBuilderResult> {
+		const gcBuilder = GCDataTreeBuilder.createRootBuilder();
+		await this.channelCollection.generateGCData(gcBuilder, latestGCSequenceNumber, fullGC);
+
+		// Attachment blobs are tracked by the blob manager rather than by a node with its own change tracking,
+		// so they are always generated in full.
+		gcBuilder.addNodes(this.blobManager.getGCData(fullGC).gcNodes);
+		return gcBuilder.getResult();
+	}
+
+	/**
+	 * @see IGarbageCollectionRuntime.getCurrentSequenceNumber
+	 */
+	public getCurrentSequenceNumber(): number {
+		return this.deltaManager.lastSequenceNumber;
+	}
+
+	/**
 	 * After GC has run, called to notify this container's nodes of routes that are used in it.
 	 * @param usedRoutes - The routes that are used in all nodes in this Container.
 	 * @see IGarbageCollectionRuntime.updateUsedRoutes
@@ -5001,6 +5028,12 @@ export class ContainerRuntime
 
 			const trace = Trace.start();
 			let summarizeResult: ISummaryTreeWithStats;
+			// The incremental GC flow reuses the graph from the last GC run, so a summary that is actually submitted
+			// must be preceded by that run. Direct callers of summarize / generateSummary (benchmarks, tests) may skip GC.
+			assert(
+				this.garbageCollector.shouldRunGC || !this.summarizeV2Enabled,
+				"GC must run before a summary is submitted when incremental GC is enabled",
+			);
 			try {
 				summarizeResult = this.summarizeV2Enabled
 					? await this.generateSummary({
