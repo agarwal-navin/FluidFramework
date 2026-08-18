@@ -257,6 +257,17 @@ export interface IGarbageCollectionDetailsBase {
 }
 
 // @beta @legacy
+export interface IGCDataBuilder {
+    addNode(id: string, outboundRoutes: readonly string[]): void;
+    addNodes(gcNodes: {
+        readonly [id: string]: readonly string[];
+    }): void;
+    addRouteToAllNodes(outboundRoute: string): void;
+    createBuilderForChild(childId: string): IGCDataBuilder;
+    nodeDidNotChange(): void;
+}
+
+// @beta @legacy
 export interface IInboundSignalMessage<TMessage extends TypedMessage = TypedMessage> extends ISignalMessage<TMessage> {
     // (undocumented)
     readonly type: TMessage["type"];
@@ -303,6 +314,7 @@ export type ISequencedMessageEnvelope = Omit<ISequencedDocumentMessage, "content
 
 // @beta @legacy
 export interface ISummarizable {
+    generateGCData(gcBuilder: IGCDataBuilder, latestGCSequenceNumber: number, fullGC: boolean): Promise<void>;
     generateSummary(summaryBuilder: ISummaryBuilder, latestSummarySequenceNumber: number, fullTree: boolean, telemetryContext: ITelemetryContext): Promise<void>;
 }
 

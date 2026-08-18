@@ -12,7 +12,10 @@ import type {
 	IGarbageCollectionDetailsBase,
 	ISummarizeResult,
 } from "@fluidframework/runtime-definitions/internal";
-import type { ReadAndParseBlob } from "@fluidframework/runtime-utils/internal";
+import type {
+	IGCDataBuilderResult,
+	ReadAndParseBlob,
+} from "@fluidframework/runtime-utils/internal";
 import type {
 	ITelemetryPropertiesExt,
 	TelemetryLoggerExt,
@@ -341,6 +344,20 @@ export interface IGarbageCollectionRuntime {
 	 * Returns the garbage collection data of the runtime.
 	 */
 	getGCData(fullGC?: boolean): Promise<IGarbageCollectionData>;
+	/**
+	 * The counterpart to {@link IGarbageCollectionRuntime.getGCData} for the incremental GC flow. Returns the data
+	 * generated during this run along with the paths of nodes that reported no change, whose data the garbage
+	 * collector fills in from the previous run's graph.
+	 */
+	generateGCData(
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<IGCDataBuilderResult>;
+	/**
+	 * Returns the sequence number of the last message the runtime has processed. This is the point in time the
+	 * garbage collector's graph is captured at, and what nodes compare against to decide if they have changed.
+	 */
+	getCurrentSequenceNumber(): number;
 	/**
 	 * After GC has run, called to notify the runtime of routes that are used in it.
 	 */

@@ -184,6 +184,8 @@ describe("Garbage Collection Tests", () => {
 		// The runtime to be passed to the garbage collector.
 		const gcRuntime: IGarbageCollectionRuntime = {
 			getGCData,
+			generateGCData: async () => ({ gcData: await getGCData(), reusedNodePaths: [] }),
+			getCurrentSequenceNumber: () => 0,
 			updateUsedRoutes: (usedRoutes: string[]) => {
 				return { totalNodeCount: 0, unusedNodeCount: 0 };
 			},

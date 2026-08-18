@@ -134,8 +134,13 @@ export class SummarizerNodeWithGC extends SummarizerNode implements IRootSummari
 	 * seen by the server for this client:
 	 * - usedRoutes: This is used to figure out if the used state of this node changed since last summary.
 	 * - gcData: The garbage collection data of this node that is required for running GC.
+	 *
+	 * @remarks
+	 * Public because the incremental GC flow does not ask this node for GC data, so it has to drive this
+	 * initialization itself. It must happen before `updateUsedRoutes` in a GC pass - loading base details overwrites
+	 * `usedRoutes`, so doing it afterwards would discard the routes GC just computed.
 	 */
-	private async loadBaseGCDetails(): Promise<void> {
+	public async loadBaseGCDetails(): Promise<void> {
 		if (this.baseGCDetailsLoaded) {
 			return;
 		}

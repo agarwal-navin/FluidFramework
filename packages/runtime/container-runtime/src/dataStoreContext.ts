@@ -47,6 +47,7 @@ import type {
 	ISummaryTreeWithStats,
 	ITelemetryContext,
 	IGarbageCollectionData,
+	IGCDataBuilder,
 	CreateChildSummarizerNodeFn,
 	CreateChildSummarizerNodeParam,
 	FluidDataStoreContextInternal,
@@ -136,20 +137,33 @@ interface IUsedStateComparer {
 }
 
 /**
- * Whether this data store runtime can be summarized by the generateSummary flow.
+ * The base GC details initialization implemented by the concrete summarizer node.
  *
  * @remarks
- * Determined by the layer compatibility details rather than by probing for the method, so that a data store
- * runtime from a version that predates the API is handled at the version boundary rather than failing.
+ * Structural for the same reason as {@link IUsedStateComparer}. The incremental GC flow never asks the summarizer
+ * node for GC data, so it has to trigger this itself to keep the node's reference-state baseline correct.
  */
-function channelSummarizesWithBuilder(
+interface IBaseGCDetailsLoader {
+	loadBaseGCDetails(): Promise<void>;
+}
+
+/**
+ * Whether this data store runtime supports the builder-based summarize and GC flows.
+ *
+ * @remarks
+ * Determined by the layer compatibility details rather than by probing for the methods, so that a data store
+ * runtime from a version that predates the API is handled at the version boundary rather than failing. Both
+ * methods are covered by one check because they are declared on {@link ISummarizable} and ship together.
+ */
+function channelSupportsBuilders(
 	channel: IFluidDataStoreChannel,
 ): channel is IFluidDataStoreChannel &
-	Required<Pick<IFluidDataStoreChannel, "generateSummary">> {
+	Required<Pick<IFluidDataStoreChannel, "generateSummary" | "generateGCData">> {
 	const { ILayerCompatDetails } = channel as FluidObject<ILayerCompatDetails>;
 	return (
 		(ILayerCompatDetails?.supportedFeatures.has(generateSummary) ?? false) &&
-		channel.generateSummary !== undefined
+		channel.generateSummary !== undefined &&
+		channel.generateGCData !== undefined
 	);
 }
 export function createAttributesBlob(
@@ -899,7 +913,7 @@ export abstract class FluidDataStoreContext
 		}
 
 		const channel = await this.realize();
-		if (channelSummarizesWithBuilder(channel)) {
+		if (channelSupportsBuilders(channel)) {
 			await channel.generateSummary(
 				summaryBuilder.createBuilderForChild(channelsTreeName, fullTree),
 				latestSummarySequenceNumber,
@@ -994,6 +1008,40 @@ export abstract class FluidDataStoreContext
 	 */
 	public async getGCData(fullGC: boolean = false): Promise<IGarbageCollectionData> {
 		return this.summarizerNode.getGCData(fullGC);
+	}
+
+	/**
+	 * The counterpart to {@link FluidDataStoreContext.getGCData} for the incremental GC flow.
+	 *
+	 * @remarks
+	 * The reuse decision is made here from this context's own last-changed sequence number rather than by a
+	 * summarizer node, so a data store that has not changed is never realized just to regenerate a graph that is
+	 * already known.
+	 */
+	public async generateGCData(
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<void> {
+		// The summarizer node still owns reference-state tracking for the summarize flow, and it initializes that
+		// baseline the first time it is asked for GC data. Since this flow never asks it, drive the initialization
+		// here instead - it has to happen before GC calls updateUsedRoutes, which is why it is not left to summarize.
+		await (this.summarizerNode as Partial<IBaseGCDetailsLoader>).loadBaseGCDetails?.();
+
+		if (!fullGC && latestGCSequenceNumber >= this.lastChangedSequenceNumber) {
+			gcBuilder.nodeDidNotChange();
+			return;
+		}
+
+		const channel = await this.realize();
+		if (channelSupportsBuilders(channel)) {
+			await channel.generateGCData(gcBuilder, latestGCSequenceNumber, fullGC);
+			return;
+		}
+
+		// A data store runtime from a version that predates the incremental GC API cannot report that it has not
+		// changed, so its whole graph is regenerated.
+		gcBuilder.addNodes((await channel.getGCData(fullGC)).gcNodes);
 	}
 
 	/**

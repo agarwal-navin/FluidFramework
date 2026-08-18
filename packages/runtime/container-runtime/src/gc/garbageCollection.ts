@@ -32,7 +32,7 @@ import { blobManagerBasePath } from "../blobManager/index.js";
 import { TombstoneResponseHeaderKey } from "../containerRuntime.js";
 import { ClientSessionExpiredError } from "../error.js";
 import { ContainerMessageType, type ContainerRuntimeGCMessage } from "../messageTypes.js";
-import type { IRefreshSummaryResult } from "../summary/index.js";
+import { enableSummarizeV2Key, type IRefreshSummaryResult } from "../summary/index.js";
 
 import { generateGCConfigs } from "./gcConfigs.js";
 import {
@@ -69,6 +69,27 @@ import {
 	UnreferencedStateTracker,
 	UnreferencedStateTrackerMap,
 } from "./gcUnreferencedStateTracker.js";
+
+/**
+ * Whether `nodeId` is one of `paths` or sits below one of them.
+ *
+ * @remarks
+ * GC node ids are absolute paths that {@link GCDataTreeBuilder} builds from each node's parent, so the nodes of a
+ * subtree are exactly the ids that have that subtree's path as an ancestor. Walking the ancestors is therefore a
+ * property of how the ids are constructed rather than a convention about how they happen to be spelled.
+ */
+function isSelfOrDescendantOf(nodeId: string, paths: ReadonlySet<string>): boolean {
+	for (
+		let path = nodeId;
+		path.length > 1;
+		path = path.slice(0, Math.max(0, path.lastIndexOf("/")))
+	) {
+		if (paths.has(path)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 /**
  * The garbage collector for the container runtime. It consolidates the garbage collection functionality and maintains
@@ -112,6 +133,17 @@ export class GarbageCollector implements IGarbageCollector {
 	public readonly sessionExpiryTimerStarted: number | undefined;
 	// Keeps track of the GC state from the last run.
 	private gcDataFromLastRun: IGarbageCollectionData | undefined;
+	/**
+	 * The sequence number that {@link GarbageCollector.gcDataFromLastRun} was captured at, or -1 if no run has
+	 * completed in this session.
+	 *
+	 * @remarks
+	 * This is the incremental GC flow's reference point, and it is deliberately GC's own clock rather than the
+	 * summary's. The graph being reused is the one from the last GC run, so the question a node has to answer is
+	 * "have I changed since that run", not "have I changed since the last acked summary". Keeping the clock matched
+	 * to the data it describes means a failed or nacked summary needs no rollback here.
+	 */
+	private latestGCSequenceNumber: number = -1;
 	// Keeps a list of references (edges in the GC graph) between GC runs. Each entry has a node id and a list of
 	// outbound routes from that node.
 	private readonly newReferencesSinceLastRun: Map<string, string[]> = new Map();
@@ -150,6 +182,16 @@ export class GarbageCollector implements IGarbageCollector {
 
 	private readonly summaryStateTracker: GCSummaryStateTracker;
 	private readonly telemetryTracker: GCTelemetryTracker;
+
+	/**
+	 * Whether nodes may report that their GC data has not changed instead of regenerating it.
+	 *
+	 * @remarks
+	 * Gated together with the builder-based summarize flow. The two share the per-node last-changed sequence
+	 * numbers that drive both reuse decisions, and a data store advertises support for both or neither, so there
+	 * is no configuration in which enabling one without the other is meaningful.
+	 */
+	private readonly incrementalGCEnabled: boolean;
 
 	/**
 	 * For a given node path, returns the node's package path.
@@ -192,6 +234,7 @@ export class GarbageCollector implements IGarbageCollector {
 		});
 
 		this.configs = generateGCConfigs(this.mc, createParams);
+		this.incrementalGCEnabled = this.mc.config.getBoolean(enableSummarizeV2Key) === true;
 
 		// If session expiry is enabled, we need to close the container when the session expiry timeout expires.
 		if (this.configs.sessionExpiryTimeoutMs !== undefined) {
@@ -590,6 +633,52 @@ export class GarbageCollector implements IGarbageCollector {
 	}
 
 	/**
+	 * Gets the container's GC graph via the incremental flow, filling in the nodes that reported no change from
+	 * the previous run's graph.
+	 *
+	 * @remarks
+	 * A node may only report no change if its content last changed at or before
+	 * {@link GarbageCollector.latestGCSequenceNumber}, which is the point the previous graph was captured at. That
+	 * makes "the previous data for this node exists" a property of the reference point rather than something to
+	 * hope for - a node created since that point cannot be eligible, so it always generates its data in full.
+	 */
+	private async getIncrementalGCData(fullGC: boolean): Promise<IGarbageCollectionData> {
+		const { gcData, reusedNodePaths } = await this.runtime.generateGCData(
+			fullGC ? -1 : this.latestGCSequenceNumber,
+			fullGC,
+		);
+		if (reusedNodePaths.length === 0) {
+			return gcData;
+		}
+
+		const previousGCNodes = this.gcDataFromLastRun?.gcNodes;
+		assert(
+			previousGCNodes !== undefined,
+			"Nodes cannot be reused before GC has produced a graph",
+		);
+
+		const gcNodes = { ...gcData.gcNodes };
+		const reusedPaths = new Set(reusedNodePaths);
+		// A reused path stands for a whole subtree, not a single node - a data store that reported no change was
+		// never realized, so its DDS nodes are absent too and all of them have to be restored. Leaving one out would
+		// not just lose a node: runGarbageCollection stops traversing at a node that is missing from the graph, so
+		// anything reachable only through that DDS's handles would come back unreferenced.
+		for (const [nodeId, outboundRoutes] of Object.entries(previousGCNodes)) {
+			if (gcNodes[nodeId] === undefined && isSelfOrDescendantOf(nodeId, reusedPaths)) {
+				gcNodes[nodeId] = [...outboundRoutes];
+			}
+		}
+
+		for (const reusedPath of reusedNodePaths) {
+			assert(
+				gcNodes[reusedPath] !== undefined,
+				"A node that reported no change must be present in the previous GC graph",
+			);
+		}
+		return { gcNodes };
+	}
+
+	/**
 	 * Runs garbage collection. It does the following:
 	 *
 	 * 1. It generates / analyzes the runtime's reference graph.
@@ -609,7 +698,12 @@ export class GarbageCollector implements IGarbageCollector {
 	): Promise<IGCStats> {
 		// 1. Generate / analyze the runtime's reference graph.
 		// Get the reference graph (gcData) and run GC algorithm to get referenced / unreferenced nodes.
-		const gcData = await this.runtime.getGCData(fullGC);
+		// Capture the sequence number before generating the data so that the reference point never claims to
+		// cover a change the graph does not include.
+		const gcSequenceNumber = this.runtime.getCurrentSequenceNumber();
+		const gcData = this.incrementalGCEnabled
+			? await this.getIncrementalGCData(fullGC)
+			: await this.runtime.getGCData(fullGC);
 		const gcResult = runGarbageCollection(gcData.gcNodes, ["/"]);
 		// Get all referenced nodes - References in this run + references between the previous and current runs.
 		const allReferencedNodeIds =
@@ -635,6 +729,7 @@ export class GarbageCollector implements IGarbageCollector {
 		this.runSweepPhase(gcResult, tombstoneReadyNodeIds, sweepReadyNodeIds);
 
 		this.gcDataFromLastRun = cloneGCData(gcData);
+		this.latestGCSequenceNumber = gcSequenceNumber;
 
 		// 5. Get the sweep phase stats.
 		const sweepPhaseStats = this.getSweepPhaseStats(

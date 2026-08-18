@@ -50,6 +50,7 @@ import {
 	type ISummaryBuilder,
 	type ITelemetryContext,
 	type IGarbageCollectionData,
+	type IGCDataBuilder,
 	type CreateChildSummarizerNodeParam,
 	CreateSummarizerNodeSource,
 	type IAttachMessage,
@@ -1211,6 +1212,31 @@ export class FluidDataStoreRuntime
 		this.updateGCNodes(builder);
 		return builder.getGCData();
 	}
+
+	/**
+	 * The counterpart to {@link FluidDataStoreRuntime.getGCData} for the incremental GC flow. The child builder
+	 * carries each context's place in the container, so contexts no longer prefix their own ids, and a context that
+	 * has not changed writes nothing at all.
+	 */
+	public readonly generateGCData?: ISummarizable["generateGCData"] = async (
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<void> => {
+		await this.visitContextsDuringSummary(
+			async (contextId: string, context: IChannelContext) => {
+				await context.generateGCData(
+					gcBuilder.createBuilderForChild(contextId),
+					latestGCSequenceNumber,
+					fullGC,
+				);
+			},
+		);
+		// Add a back route to this data store from every channel, then this data store's own node. The order
+		// matters: the back route belongs on the channels, not on this data store itself.
+		gcBuilder.addRouteToAllNodes(this.absolutePath);
+		gcBuilder.addNode("/", this.getOutboundRoutes());
+	};
 
 	/**
 	 * After GC has run, called to notify this channel of routes that are used in it. It calls the child contexts to

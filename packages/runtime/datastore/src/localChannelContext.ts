@@ -14,6 +14,7 @@ import type {
 	ITelemetryContext,
 	IFluidDataStoreContext,
 	IGarbageCollectionData,
+	IGCDataBuilder,
 	ISummarizeResult,
 	ISummaryBuilder,
 	IPendingMessagesState,
@@ -234,6 +235,19 @@ export abstract class LocalChannelContextBase implements IChannelContext {
 	public async getGCData(fullGC: boolean = false): Promise<IGarbageCollectionData> {
 		const channel = await this.getChannel();
 		return channel.getGCData(fullGC);
+	}
+
+	public async generateGCData(
+		gcBuilder: IGCDataBuilder,
+		latestGCSequenceNumber: number,
+		fullGC: boolean,
+	): Promise<void> {
+		if (!fullGC && latestGCSequenceNumber >= this.lastChangedSequenceNumber) {
+			gcBuilder.nodeDidNotChange();
+			return;
+		}
+		const channel = await this.getChannel();
+		gcBuilder.addNodes(channel.getGCData(fullGC).gcNodes);
 	}
 
 	public updateUsedRoutes(usedRoutes: string[]): void {
